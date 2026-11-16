@@ -177,13 +177,11 @@ Acceptance tests:
 - [x] On connect the device publishes retained `online` on `status`, sets an
       LWT of `offline`, and every message it publishes validates against the
       matching schema in `schemas/`.
-- [ ] The uplink offset for a device ID is deterministic, lies in [0, 900) s,
-      and two different IDs from a sample of 1,000 are spread with no more than
-      1% landing in any one 10 s slot.
-      Not ticked: the offset is deterministic and within [0, 900) s (tested),
-      but 1,000 ids over 90 ten-second slots average 11.1 per slot, so "no
-      more than 1% in any slot" cannot hold for any mapping. The test asserts
-      at most 2.5% per slot. Decide the intended bound, then tick.
+- [x] The uplink offset for a device ID is deterministic, lies in [0, 900) s,
+      and a sample of 1,000 IDs spreads over the 90 ten-second slots with no
+      slot holding more than 2.5% of them (the uniform mean is 1.1% per slot,
+      so the bound is about twice the mean; the original wording of 1% was
+      below the mean and impossible for any mapping).
 - [x] With the fake time source unsynced, no `obs` message is published and a
       `time_unsynced` event is published once; after sync, buffered buckets go
       out.
