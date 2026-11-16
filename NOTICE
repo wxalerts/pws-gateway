@@ -5,7 +5,9 @@ Licensed under the MIT License. See LICENSE.
 This project runs third-party tools as separate processes. They are not linked
 into the gateway binary and keep their own licenses:
 
-  rtl_433        GPL-2.0-or-later   https://github.com/merbanan/rtl_433
+  rtl_433        GPL-2.0-or-later   built from the wxalerts fork
+                                    https://github.com/wxalerts/rtl_433 of
+                                    https://github.com/merbanan/rtl_433
   rtldavis       GPL-3.0            https://github.com/lheijst/rtldavis (optional module, not in v1)
   librtlsdr      GPL-2.0            https://github.com/osmocom/rtl-sdr
 

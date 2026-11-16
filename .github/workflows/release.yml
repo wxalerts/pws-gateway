@@ -553,15 +553,15 @@ jobs:
 
       - name: Fetch rtl_433 source tarball
         # GPL-2.0-or-later requires the corresponding source for the rtl_433
-        # build that ships in the pws-rtl433 image. The tag and checksum are
+        # build that ships in the pws-rtl433 image. The fork commit and checksum are
         # read from the Dockerfile so the two cannot drift apart.
         run: |
           set -euo pipefail
-          tag=$(sed -n 's/^ARG RTL433_VERSION=\(.*\)$/\1/p' deploy/rtl433/Dockerfile)
+          tag=$(sed -n 's/^ARG RTL433_COMMIT=\(.*\)$/\1/p' deploy/rtl433/Dockerfile)
           sha=$(sed -n 's/^ARG RTL433_SHA256=\(.*\)$/\1/p' deploy/rtl433/Dockerfile)
           [ -n "$tag" ] && [ -n "$sha" ]
           curl -sSL -o "dist/rtl_433-${tag}-source.tar.gz" \
-            "https://github.com/merbanan/rtl_433/archive/refs/tags/${tag}.tar.gz"
+            "https://github.com/wxalerts/rtl_433/archive/${tag}.tar.gz"
           echo "${sha}  dist/rtl_433-${tag}-source.tar.gz" | sha256sum -c -
           cp deploy/rtl433/Dockerfile "dist/rtl_433-${tag}-build-recipe.Dockerfile"
 
