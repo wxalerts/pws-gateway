@@ -15,7 +15,7 @@ change under MIT.
 | Tool | Version | Notes |
 | --- | --- | --- |
 | Go | the `go` line in `go.mod` | Newer Go toolchains build older `go.mod` versions fine. |
-| Node | 20 LTS | Only needed for `web/`. |
+| Node | 22 LTS | Only needed for `web/`. |
 | golangci-lint | v2 (CI pins the exact version in `.github/workflows/ci.yml`) | Config in `.golangci.yml`. |
 | Docker with Buildx | any current release | Only for the `deploy/` images. |
 

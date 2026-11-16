@@ -130,7 +130,7 @@ short version.
 
 ## Code and repository
 
-- Go: version in `go.mod`; `gofmt` and `golangci-lint` clean. Web: Node 20 LTS,
+- Go: version in `go.mod`; `gofmt` and `golangci-lint` clean. Web: Node 22 LTS,
   `npm run lint` clean.
 - GPL tools (`rtl_433`, rtldavis) run as separate processes talking JSON over
   stdout. They are never linked in. `NOTICE` lists them.

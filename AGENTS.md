@@ -37,7 +37,7 @@ Schemas in `schemas/` are the source of truth shared with the server side.
 
 - Go: the version in `go.mod`. Run `gofmt` and `golangci-lint run` before
   committing. CI fails on either.
-- Web: Node 20 LTS, `npm ci` inside `web/`. Lint with `npm run lint`.
+- Web: Node 22 LTS, `npm ci` inside `web/`. Lint with `npm run lint`.
 - `make test` runs Go tests, web tests and schema validation. `make check`
   adds lint.
 - SQLite through `modernc.org/sqlite` (no cgo) so cross-compiling for arm64

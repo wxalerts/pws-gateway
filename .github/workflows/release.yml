@@ -46,7 +46,7 @@ concurrency:
 env:
   GATEWAY_IMAGE: ghcr.io/wxalerts/pws-gateway
   RTL433_IMAGE: ghcr.io/wxalerts/pws-rtl433
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
 
 jobs:
   build:

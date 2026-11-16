@@ -41,7 +41,7 @@ Updated 2026-11-16 in repo:
   Infisical machine identity exists.
 - The daemon is a single static Go binary cross-compiled with
   `CGO_ENABLED=0 GOARCH=arm64`; SQLite uses `modernc.org/sqlite` so no cross C
-  toolchain is needed. The React SPA is built with Node 20 and embedded with
+  toolchain is needed. The React SPA is built with Node 22 and embedded with
   `go:embed`.
 - Update bundles are hosted on object storage behind the WxAlerts manifest
   service (per the Auto-update decisions), not on GitHub Releases as the

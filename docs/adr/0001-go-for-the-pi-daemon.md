@@ -37,5 +37,5 @@ so the choice of language does not leak Pi assumptions into the rest.
   instead (see Relay plugin topology).
 - rtldavis is also Go, which makes linking it tempting. ADR 0002 forbids it;
   it stays a separate process.
-- Contributors need Go and Node 20. The web build happens before the Go build
+- Contributors need Go and Node 22. The web build happens before the Go build
   so the embedded assets are current.
