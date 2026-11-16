@@ -1,0 +1,8 @@
+# Changes to these paths require a review from the listed owner before merge
+# (enforced by branch protection on main, see docs/ci.md).
+#
+# Workflows can exfiltrate secrets or alter what gets signed, and keys/ holds
+# the public keys every device pins. Both deserve a human maintainer's eyes.
+
+/.github/workflows/  @chancellor1101
+/keys/               @chancellor1101
