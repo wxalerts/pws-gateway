@@ -46,6 +46,7 @@ func NewWithAdapter(a *linuxfs.Adapter) *Platform {
 		p.board.Model = "generic Linux host"
 	}
 	p.board.Serial = a.FS.DeviceTreeSerial()
+	p.board.MachineID = a.FS.MachineID()
 	if mi, err := a.FS.MemInfo(); err == nil {
 		p.board.RAMMB = mi.TotalMB
 	}

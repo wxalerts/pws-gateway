@@ -49,6 +49,10 @@ type BoardInfo struct {
 	Arch string `json:"arch"`
 	// Serial is the board serial number when the firmware exposes one.
 	Serial string `json:"serial,omitempty"`
+	// MachineID is the OS machine id (/etc/machine-id), the stable identity
+	// of a host that has no board serial. It is never serialized: only the
+	// claim flow reads it, and only as input to a hash.
+	MachineID string `json:"-"`
 	// RAMMB is the total memory in mebibytes.
 	RAMMB int `json:"ram_mb"`
 	// Tier is the supported hardware tier.

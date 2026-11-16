@@ -84,6 +84,15 @@ func (h Host) DeviceTreeSerial() string {
 	return s
 }
 
+// MachineID returns /etc/machine-id, or "" when the host has none.
+func (h Host) MachineID() string {
+	s, err := h.readTrimmed("etc/machine-id")
+	if err != nil {
+		return ""
+	}
+	return s
+}
+
 // MemInfo holds the two /proc/meminfo lines pwsgw cares about, in mebibytes.
 type MemInfo struct {
 	TotalMB     int

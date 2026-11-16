@@ -53,11 +53,12 @@ func NewWithAdapter(a *linuxfs.Adapter) (*Platform, error) {
 	}
 	p := &Platform{Adapter: a}
 	p.board = platform.BoardInfo{
-		Model:  model,
-		SoC:    soc(a.FS.DeviceTreeCompatible()),
-		Arch:   runtime.GOARCH,
-		Serial: a.FS.DeviceTreeSerial(),
-		Tier:   Classify(model),
+		Model:     model,
+		SoC:       soc(a.FS.DeviceTreeCompatible()),
+		Arch:      runtime.GOARCH,
+		Serial:    a.FS.DeviceTreeSerial(),
+		MachineID: a.FS.MachineID(),
+		Tier:      Classify(model),
 	}
 	if mi, err := a.FS.MemInfo(); err == nil {
 		p.board.RAMMB = mi.TotalMB

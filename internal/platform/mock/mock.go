@@ -41,8 +41,10 @@ func New() *Platform {
 			Model: "Raspberry Pi 4 Model B Rev 1.4",
 			SoC:   "bcm2711",
 			Arch:  "arm64",
-			RAMMB: 3792,
-			Tier:  platform.TierPi4,
+			// A fixed fake serial so claim tests derive a stable hardware id.
+			Serial: "10000000abcdef01",
+			RAMMB:  3792,
+			Tier:   platform.TierPi4,
 		},
 		HealthValue: platform.Health{
 			CPUTempC:      48.2,

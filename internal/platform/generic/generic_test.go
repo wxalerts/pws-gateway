@@ -23,6 +23,10 @@ func TestGenericReportsOnlyWhatItCanRead(t *testing.T) {
 		t.Fatalf("board = %+v", b)
 	}
 
+	if b.MachineID != "0123456789abcdef0123456789abcdef" {
+		t.Fatalf("machine id = %q", b.MachineID)
+	}
+
 	h, err := p.Health(context.Background())
 	if err != nil {
 		t.Fatal(err)
