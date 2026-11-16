@@ -80,7 +80,23 @@ export interface MockRadio {
 export type UpdateState =
   'idle' | 'downloading' | 'staged' | 'rebooting' | 'good' | 'rolled_back' | 'failed' | 'deferred';
 
+/**
+ * The device claim. The mock "approves" a code CLAIM_APPROVE_AFTER_MS after it
+ * was issued (set MOCK_CLAIM_NEVER=1 to watch the code and its countdown
+ * instead), so the whole flow can be seen without the WxAlerts API.
+ */
+export interface MockClaim {
+  state: 'unclaimed' | 'pending' | 'claimed';
+  startedAt: number;
+  error: 'expired' | 'denied' | 'failed' | null;
+  deviceId: string | null;
+}
+
+export const CLAIM_EXPIRES_MS = 10 * 60_000;
+export const CLAIM_APPROVE_AFTER_MS = 25_000;
+
 export interface MockState {
+  claim: MockClaim;
   needsSetup: boolean;
   user: { username: string; password: string } | null;
   sessions: Set<string>;
@@ -105,6 +121,7 @@ function minutesAgo(min: number): string {
 export function createState(): MockState {
   const needsSetup = process.env.MOCK_NEEDS_SETUP === '1';
   return {
+    claim: { state: 'unclaimed', startedAt: 0, error: null, deviceId: null },
     needsSetup,
     user: needsSetup ? null : { username: 'admin', password: 'admin' },
     sessions: new Set(),

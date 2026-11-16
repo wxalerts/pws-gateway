@@ -3,6 +3,7 @@
 import { http, type RequestOptions } from './client';
 import type {
   ApplyResult,
+  Claim,
   Config,
   Credentials,
   Health,
@@ -50,6 +51,12 @@ export const api = {
       http.put<unknown>(`/api/config/${encodeURIComponent(section)}`, value),
     apply: () => http.post<ApplyResult>('/api/config/apply'),
     confirm: () => http.post<unknown>('/api/config/confirm'),
+  },
+  claim: {
+    get: (opts?: RequestOptions) => http.get<Claim>('/api/claim', opts),
+    start: () => http.post<Claim>('/api/claim/start'),
+    cancel: () => http.post<Claim>('/api/claim/cancel'),
+    unlink: () => http.post<Claim>('/api/claim/unlink'),
   },
   uplink: (opts?: RequestOptions) => http.get<Uplink>('/api/uplink', opts),
   update: (opts?: RequestOptions) => http.get<UpdateStatus>('/api/update', opts),

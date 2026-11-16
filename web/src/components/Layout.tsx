@@ -8,6 +8,7 @@ const NAV: { to: string; label: string }[] = [
   { to: '/', label: 'Dashboard' },
   { to: '/stations', label: 'Stations' },
   { to: '/radios', label: 'Radios' },
+  { to: '/account', label: 'WxAlerts account' },
   { to: '/uplink', label: 'Uplink' },
   { to: '/updates', label: 'Updates' },
   { to: '/network', label: 'Network' },

@@ -759,3 +759,66 @@ legend.field-label {
   font-size: 0.85rem;
   letter-spacing: 0.04em;
 }
+
+/* Account page: the claim code */
+.claim-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap);
+  align-items: start;
+}
+
+@media (min-width: 720px) {
+  .claim-layout {
+    grid-template-columns: 1fr auto;
+  }
+}
+
+.claim-steps {
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+.claim-code {
+  margin: 0;
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  font-family: var(--mono);
+  font-size: clamp(2rem, 9vw, 3.25rem);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-align: center;
+  user-select: all;
+}
+
+.claim-timer {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.claim-timer.warn {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.claim-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.claim-qr {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 220px;
+}
+
+.qr {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}

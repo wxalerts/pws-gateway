@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { RequireAuth } from './auth/AuthContext';
 import { Layout } from './components/Layout';
+import { AccountPage } from './pages/Account';
 import { AboutPage } from './pages/About';
 import { DashboardPage } from './pages/Dashboard';
 import { HomeAssistantPage } from './pages/HomeAssistant';
@@ -30,6 +31,7 @@ export function App() {
         <Route path="stations" element={<StationsPage />} />
         <Route path="stations/:key" element={<StationDetailPage />} />
         <Route path="radios" element={<RadiosPage />} />
+        <Route path="account" element={<AccountPage />} />
         <Route path="uplink" element={<UplinkPage />} />
         <Route path="updates" element={<UpdatesPage />} />
         <Route path="network" element={<NetworkPage />} />

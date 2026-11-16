@@ -89,6 +89,7 @@ export function DashboardPage() {
   const uplink = usePoll((s) => api.uplink({ signal: s }), 15000);
   const update = usePoll((s) => api.update({ signal: s }), 30000);
   const stations = usePoll((s) => api.stations.list({ signal: s }), 15000);
+  const claim = usePoll((s) => api.claim.get({ signal: s }), 15000);
 
   useEffect(() => {
     document.title = 'Dashboard | PWS Gateway';
@@ -111,6 +112,14 @@ export function DashboardPage() {
       {health.error && !h && <Alert tone="bad">{errorMessage(health.error)}</Alert>}
 
       <div className="stack">
+        {claim.data && claim.data.state !== 'claimed' && (
+          <Alert tone="info" title="This gateway is not linked to WxAlerts yet">
+            It is collecting readings, but nothing is sent until you link it.{' '}
+            <Link to="/account">
+              {claim.data.state === 'pending' ? 'Show the code' : 'Link it to your account'}
+            </Link>
+          </Alert>
+        )}
         {h && <PowerWarnings health={h} />}
 
         <div className="grid">

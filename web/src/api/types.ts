@@ -113,6 +113,21 @@ export interface ApplyResult {
   confirm_deadline: string;
 }
 
+export type ClaimState = 'unclaimed' | 'pending' | 'claimed';
+
+export interface Claim {
+  state: ClaimState;
+  /** The 8 character code with a dash in the middle, while pending. */
+  user_code: string | null;
+  verification_uri: string | null;
+  /** Same address with the code filled in, for the QR code. */
+  verification_uri_complete: string | null;
+  expires_at: string | null;
+  device_id: string | null;
+  /** Why the last claim ended: expired, denied or failed. */
+  error: 'expired' | 'denied' | 'failed' | null;
+}
+
 export interface Uplink {
   connected: boolean;
   broker: string;

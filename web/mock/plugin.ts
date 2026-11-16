@@ -7,7 +7,15 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
-import { createState, recompute, toApi, uptimeSeconds, type MockState } from './state';
+import {
+  CLAIM_APPROVE_AFTER_MS,
+  CLAIM_EXPIRES_MS,
+  createState,
+  recompute,
+  toApi,
+  uptimeSeconds,
+  type MockState,
+} from './state';
 import { readingsSince } from './readings';
 
 const COOKIE = 'pwsgw_session';
@@ -290,12 +298,32 @@ async function route(
     return send(res, 200, { confirmed: true });
   }
 
+  if (path === '/api/claim' && method === 'GET') return send(res, 200, claimBody(state));
+  if (path === '/api/claim/start' && method === 'POST') {
+    if (state.claim.state === 'claimed') {
+      return fail(res, 409, 'already_linked', 'This gateway is already linked. Unlink it first.');
+    }
+    state.claim = { state: 'pending', startedAt: Date.now(), error: null, deviceId: null };
+    return send(res, 200, claimBody(state));
+  }
+  if (path === '/api/claim/cancel' && method === 'POST') {
+    if (state.claim.state === 'pending') {
+      state.claim = { state: 'unclaimed', startedAt: 0, error: null, deviceId: null };
+    }
+    return send(res, 200, claimBody(state));
+  }
+  if (path === '/api/claim/unlink' && method === 'POST') {
+    state.claim = { state: 'unclaimed', startedAt: 0, error: null, deviceId: null };
+    return send(res, 200, claimBody(state));
+  }
+
   if (path === '/api/uplink' && method === 'GET') {
-    const connected = Math.floor(now / 300_000) % 7 !== 3; // drop out for five minutes now and then
+    const linked = claimBody(state).state === 'claimed';
+    const connected = linked && Math.floor(now / 300_000) % 7 !== 3; // drop out for five minutes now and then
     return send(res, 200, {
       connected,
-      broker: 'mqtts://ingest.wxalerts.org:8883',
-      device_id: 'pws-7f3a9c',
+      broker: linked ? 'wss://pws-mqtt.wxalerts.org/mqtt' : '',
+      device_id: linked ? (state.claim.deviceId ?? '') : '',
       last_publish: new Date(now - (now % 900_000) - 12_000).toISOString(),
       outbox: outbox(now),
     });
@@ -347,6 +375,33 @@ async function route(
     return fail(res, 405, 'method_not_allowed');
   }
   return fail(res, 404, 'not_found', `No route for ${method} ${path}`);
+}
+
+/** Advance the mock claim (approval, expiry) and return the API body. */
+function claimBody(state: MockState) {
+  const c = state.claim;
+  const now = Date.now();
+  if (c.state === 'pending') {
+    if (now - c.startedAt >= CLAIM_EXPIRES_MS) {
+      state.claim = { state: 'unclaimed', startedAt: 0, error: 'expired', deviceId: null };
+    } else if (
+      process.env.MOCK_CLAIM_NEVER !== '1' &&
+      now - c.startedAt >= CLAIM_APPROVE_AFTER_MS
+    ) {
+      state.claim = { state: 'claimed', startedAt: 0, error: null, deviceId: 'd_7f3a9c2b1k' };
+    }
+  }
+  const s = state.claim;
+  const pending = s.state === 'pending';
+  return {
+    state: s.state,
+    user_code: pending ? 'K7MP-2XQD' : null,
+    verification_uri: pending ? 'https://wxalerts.org/pws/claim' : null,
+    verification_uri_complete: pending ? 'https://wxalerts.org/pws/claim?code=K7MP2XQD' : null,
+    expires_at: pending ? new Date(s.startedAt + CLAIM_EXPIRES_MS).toISOString() : null,
+    device_id: s.state === 'claimed' ? s.deviceId : null,
+    error: s.error,
+  };
 }
 
 function outbox(now: number) {
