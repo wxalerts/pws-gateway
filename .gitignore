@@ -5,9 +5,11 @@
 *.out
 coverage.*
 
-# Web UI
+# Web UI. The built bundle is embedded by web/embed.go, which needs the dist
+# directory to exist in a clean checkout, so only the .keep marker is tracked.
 web/node_modules/
-web/dist/
+web/dist/*
+!web/dist/.keep
 web/.vite/
 
 # Local runtime state
