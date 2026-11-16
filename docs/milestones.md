@@ -226,13 +226,16 @@ see `docs/server-integration.md`.
 
 Acceptance tests:
 
-- [ ] Against a mock claim API, the device displays a short code, polls at the
+- [x] Against a mock claim API, the device displays a short code, polls at the
       interval the API specifies, and on approval stores the MQTT credentials
       in a file with mode 0600 owned by the daemon user; the user's WxAlerts
-      password never appears in any request the device makes.
+      password never appears in any request the device makes. (Covered by
+      `internal/claim`, `internal/web` and `internal/app` tests against
+      `claimtest`, including slow_down, expiry and access_denied.)
 - [ ] Credentials never appear in any MQTT payload, log line or support
       bundle (a test greps the bundle and the captured log output for the
-      credential value).
+      credential value). (The claim log and the claim API are checked; the
+      support bundle does not exist yet.)
 - [ ] After the owner revokes the device, the next connect attempt is refused
       and the UI shows the device as unclaimed with a new code.
 - [ ] (Private) With two devices' credentials, a publish to the other device's

@@ -1,14 +1,15 @@
 package claim_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -21,6 +22,24 @@ import (
 	"github.com/wxalerts/pws-gateway/internal/uplink"
 )
 
+// safeBuffer is a log sink the poller and the test can share.
+type safeBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *safeBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *safeBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
 type rig struct {
 	t       *testing.T
 	dir     string
@@ -28,6 +47,7 @@ type rig struct {
 	plat    *mock.Platform
 	api     *claimtest.Fake
 	m       *claim.Manager
+	logs    safeBuffer
 	claimed atomic.Int32
 	unlinks atomic.Int32
 }
@@ -51,7 +71,7 @@ func (r *rig) build() {
 	r.t.Helper()
 	m, err := claim.New(claim.Options{
 		DataDir: r.dir, Config: r.cfg, Platform: r.plat,
-		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:  slog.New(slog.NewTextHandler(&r.logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		APIBase: r.api.URL, FW: "0.5.0", TimeUnit: 2 * time.Millisecond,
 		OnClaimed: func() { r.claimed.Add(1) },
 		OnUnlink:  func() { r.unlinks.Add(1) },
@@ -150,6 +170,12 @@ func TestPendingThenSuccessWritesCredentialsConfigAndStartsUplink(t *testing.T) 
 	for _, f := range []string{claim.StateFile, "config.json"} {
 		if raw, err := os.ReadFile(filepath.Join(r.dir, f)); err == nil && strings.Contains(string(raw), "s3cret-password-value") {
 			t.Errorf("%s holds the password", f)
+		}
+	}
+	// Neither the password nor the poll secret reaches the log.
+	for _, secret := range append(r.api.PollCodes(), "s3cret-password-value") {
+		if strings.Contains(r.logs.String(), secret) {
+			t.Fatalf("log output contains a secret: %s", r.logs.String())
 		}
 	}
 	for _, c := range r.api.PollCodes() {
