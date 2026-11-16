@@ -1,0 +1,17 @@
+# Applies when building with -f deploy/Dockerfile (BuildKit reads the
+# dockerignore that sits next to the Dockerfile). Keeps the context small and
+# stops host build output from leaking into the image.
+.git
+.github
+bin
+dist
+web/node_modules
+web/dist
+web/.vite
+*.db
+*.db-wal
+*.db-shm
+*.key
+*.pem
+.env
+.env.*

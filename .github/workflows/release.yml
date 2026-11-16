@@ -1,0 +1,637 @@
+# Release pipeline: build, sign, publish.
+#
+# Design summary (full text in docs/release-signing.md):
+#
+#   build    No secrets. Cross-compiles the gateway for linux/arm64 and
+#            linux/amd64, builds the multi-arch container images, writes
+#            manifest.json with sha256 and sizes, and uploads everything as
+#            workflow artifacts. The same job shape could run on a pull
+#            request, which is why it must never need a secret.
+#
+#   sign     Runs only for tags "v*" and only when the repository variable
+#            RELEASE_SIGNING_ENABLED is "true". It runs inside the
+#            "release-signing" GitHub Environment, which has required
+#            reviewers, so a human approves every signature. It exchanges the
+#            job's OIDC token for a short lived Infisical access token and
+#            asks Infisical KMS to sign manifest.json server-side with a
+#            non-exportable Ed25519 key. The ONLINE private key never leaves
+#            Infisical; the runner only ever sees the signature. The OFFLINE
+#            root key never touches CI; it only signs keys/delegation.json,
+#            which names the online key. Signatures are raw Ed25519 over the
+#            file bytes, base64 in a one-line .sig file, so the device
+#            verifier is Go's crypto/ed25519 and nothing else.
+#
+#   publish  Attaches the bundles, manifest, signature, SBOM and the exact
+#            rtl_433 source tarball (GPL obligation, see NOTICE) to the
+#            GitHub Release, then hands off to object storage for device
+#            downloads. GitHub release URLs are not used by devices because
+#            10,000+ gateways polling them would hit rate limits.
+#
+# Every third-party action is pinned to a full commit SHA with the tag it
+# resolves to in a trailing comment.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GATEWAY_IMAGE: ghcr.io/wxalerts/pws-gateway
+  RTL433_IMAGE: ghcr.io/wxalerts/pws-rtl433
+  NODE_VERSION: "20"
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # Needed only to push the container images to ghcr.io on a tag.
+      packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_number: ${{ steps.version.outputs.version_number }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Derive version
+        id: version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Accept vMAJOR.MINOR.PATCH with an optional -rc.N suffix. Anything
+          # else is a mistake and must not produce a release.
+          if ! [[ "$REF_NAME" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-rc\.([0-9]+))?$ ]]; then
+            echo "Tag '$REF_NAME' is not vMAJOR.MINOR.PATCH[-rc.N]" >&2
+            exit 1
+          fi
+          major=${BASH_REMATCH[1]}; minor=${BASH_REMATCH[2]}; patch=${BASH_REMATCH[3]}
+          rc=${BASH_REMATCH[5]:-}
+          # Monotonic integer the device compares before accepting an update.
+          # rc.N sorts below the final release of the same version (99).
+          if [ -n "$rc" ]; then
+            if [ "$rc" -ge 99 ]; then echo "rc number must be below 99" >&2; exit 1; fi
+            tail=$rc; prerelease=true
+          else
+            tail=99; prerelease=false
+          fi
+          version_number=$(( major * 1000000 + minor * 10000 + patch * 100 + tail ))
+          {
+            echo "version=${REF_NAME#v}"
+            echo "version_number=$version_number"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        if: hashFiles('web/package.json') != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web UI
+        # The Go binary embeds web/dist. When the UI is not in the tree yet,
+        # a placeholder keeps the embed directive satisfied.
+        run: |
+          set -euo pipefail
+          if [ -f web/package.json ]; then
+            (cd web && npm ci && npm run build)
+          else
+            mkdir -p web/dist
+            printf 'web UI not built\n' > web/dist/index.html
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: ${{ hashFiles('go.sum') != '' }}
+
+      - name: Cross-compile gateway
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          commit=$(git rev-parse --short HEAD)
+          date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          for arch in arm64 amd64; do
+            GOOS=linux GOARCH=$arch go build -trimpath \
+              -ldflags "-s -w -buildid= -X main.version=${VERSION} -X main.commit=${commit} -X main.date=${date}" \
+              -o "dist/pwsgw-linux-${arch}" ./cmd/pwsgw
+          done
+
+      - name: Package bundles
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          for arch in arm64 amd64; do
+            stage=$(mktemp -d)
+            cp "dist/pwsgw-linux-${arch}" "$stage/pwsgw"
+            cp LICENSE NOTICE "$stage/"
+            cp -r deploy/systemd deploy/udev deploy/modprobe.d "$stage/"
+            # Fixed mtime and sorted names so the same inputs give the same
+            # tarball bytes.
+            tar --sort=name --mtime='1970-01-01 00:00:00Z' --owner=0 --group=0 --numeric-owner \
+              -C "$stage" -czf "dist/pws-gateway_${VERSION}_linux_${arch}.tar.gz" .
+            rm -rf "$stage"
+          done
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to ghcr.io
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Gateway image metadata
+        id: meta_gateway
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.GATEWAY_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ steps.version.outputs.prerelease == 'false' }}
+
+      - name: Build and push gateway image
+        id: push_gateway
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/arm64,linux/amd64
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          tags: ${{ steps.meta_gateway.outputs.tags }}
+          labels: ${{ steps.meta_gateway.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+          cache-from: type=gha,scope=gateway
+          cache-to: type=gha,scope=gateway,mode=max
+
+      - name: rtl_433 image metadata
+        id: meta_rtl433
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.RTL433_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ steps.version.outputs.prerelease == 'false' }}
+
+      - name: Build and push rtl_433 image
+        id: push_rtl433
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          # Context is deploy/ so the image can carry the same udev rules the
+          # host install uses.
+          context: deploy
+          file: deploy/rtl433/Dockerfile
+          platforms: linux/arm64,linux/amd64
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          tags: ${{ steps.meta_rtl433.outputs.tags }}
+          labels: ${{ steps.meta_rtl433.outputs.labels }}
+          cache-from: type=gha,scope=rtl433
+          cache-to: type=gha,scope=rtl433,mode=max
+
+      - name: Generate SBOM
+        # Syft over the source tree covers the Go module graph and the web
+        # lockfile in one document. The release asset upload is done by the
+        # publish job, so both uploads here are off.
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/pws-gateway_${{ steps.version.outputs.version }}.sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Write manifest.json
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          VERSION_NUMBER: ${{ steps.version.outputs.version_number }}
+          GATEWAY_DIGEST: ${{ steps.push_gateway.outputs.digest }}
+          RTL433_DIGEST: ${{ steps.push_rtl433.outputs.digest }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, datetime, pathlib, re
+          version = os.environ["VERSION"]
+          dist = pathlib.Path("dist")
+          now = datetime.datetime.now(datetime.timezone.utc)
+          artifacts = []
+          for path in sorted(dist.glob(f"pws-gateway_{version}_linux_*.tar.gz")):
+              arch = re.search(r"_linux_(\w+)\.tar\.gz$", path.name).group(1)
+              data = path.read_bytes()
+              artifacts.append({
+                  "name": path.name,
+                  "os": "linux",
+                  "arch": arch,
+                  "sha256": hashlib.sha256(data).hexdigest(),
+                  "size": len(data),
+              })
+          if not artifacts:
+              raise SystemExit("no bundles found in dist/")
+          manifest = {
+              "schema": 1,
+              "version": version,
+              "version_number": int(os.environ["VERSION_NUMBER"]),
+              "created": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+              # Devices refuse a manifest past its expiry so an attacker who
+              # can replay old files cannot freeze a fleet on a known-bad
+              # release. 90 days leaves room for a slow release cadence.
+              "expires": (now + datetime.timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "commit": os.environ.get("GITHUB_SHA", ""),
+              "artifacts": artifacts,
+              "images": {
+                  "gateway": {"ref": os.environ["GATEWAY_IMAGE"], "digest": os.environ.get("GATEWAY_DIGEST", "")},
+                  "rtl433": {"ref": os.environ["RTL433_IMAGE"], "digest": os.environ.get("RTL433_DIGEST", "")},
+              },
+          }
+          (dist / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+          print(json.dumps(manifest, indent=2, sort_keys=True))
+          PY
+          (cd dist && sha256sum -- * > SHA256SUMS)
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  sign-status:
+    # Writes a plain statement into the run summary so nobody has to open the
+    # sign job to learn whether this release was signed. Runs without the
+    # protected environment, so it never pages the required reviewers.
+    name: Signing status
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - name: Report
+        env:
+          ENABLED: ${{ vars.RELEASE_SIGNING_ENABLED }}
+        run: |
+          {
+            echo "## Release signing"
+            if [ "$ENABLED" = "true" ]; then
+              echo "RELEASE_SIGNING_ENABLED is true. The sign job will run in the release-signing environment and wait for reviewer approval."
+            else
+              echo "RELEASE_SIGNING_ENABLED is not 'true' (value: '${ENABLED:-unset}'). The sign job is SKIPPED and this release ships an UNSIGNED manifest. Devices will not install it."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  sign:
+    name: Sign manifest
+    runs-on: ubuntu-24.04
+    needs: build
+    # Both conditions are required. The tag filter guards against a future
+    # trigger being added above; the variable keeps this a no-op until the
+    # maintainer has finished the one-time setup in docs/release-signing.md.
+    if: startsWith(github.ref, 'refs/tags/v') && vars.RELEASE_SIGNING_ENABLED == 'true'
+    environment:
+      name: release-signing
+    permissions:
+      id-token: write
+      contents: write
+    env:
+      # Repository or environment variables, never secrets. None of these are
+      # confidential: the identity id and the KMS key id are UUIDs that are
+      # useless without a matching OIDC token from this repository and
+      # environment.
+      INFISICAL_URL: ${{ vars.INFISICAL_URL }}
+      INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
+      INFISICAL_OIDC_AUDIENCE: ${{ vars.INFISICAL_OIDC_AUDIENCE }}
+      INFISICAL_KMS_KEY_ID: ${{ vars.INFISICAL_KMS_KEY_ID }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-dist
+          path: dist
+
+      - name: Check configuration
+        run: |
+          set -euo pipefail
+          missing=0
+          for v in INFISICAL_URL INFISICAL_IDENTITY_ID INFISICAL_OIDC_AUDIENCE INFISICAL_KMS_KEY_ID; do
+            if [ -z "${!v:-}" ]; then echo "Repository variable $v is not set" >&2; missing=1; fi
+          done
+          for f in keys/root.pub keys/root-backup.pub keys/release.pub keys/delegation.json keys/delegation.json.sig; do
+            if [ ! -f "$f" ]; then echo "Missing $f" >&2; missing=1; fi
+          done
+          [ "$missing" -eq 0 ]
+          openssl version
+          jq --version
+
+      - name: Verify delegation is signed by a root key
+        # The online key is only trusted because an offline root signed the
+        # delegation file that names it. Refuse to sign anything if that
+        # chain is broken in the repository. Key files hold one base64 line
+        # with the 32 raw Ed25519 public key bytes (comment lines start with
+        # '#'); .sig files hold one base64 line with the 64 raw signature
+        # bytes. OpenSSL needs the SPKI wrapper, so it is prepended here.
+        run: |
+          set -euo pipefail
+          spki_prefix='302a300506032b6570032100'
+          to_der() { { echo -n "$spki_prefix" | xxd -r -p; grep -v '^#' "$1" | tail -n1 | base64 -d; } > "$2"; }
+          base64 -d keys/delegation.json.sig > /tmp/delegation.sig
+          verified=""
+          for root in keys/root.pub keys/root-backup.pub; do
+            to_der "$root" /tmp/root.der
+            if openssl pkeyutl -verify -rawin -pubin -keyform DER -inkey /tmp/root.der \
+                 -in keys/delegation.json -sigfile /tmp/delegation.sig > /dev/null 2>&1; then
+              verified=$root; break
+            fi
+          done
+          if [ -z "$verified" ]; then
+            echo "keys/delegation.json is not signed by either root key" >&2
+            exit 1
+          fi
+          echo "delegation.json verified with $verified"
+          python3 - <<'PY'
+          import json, pathlib, datetime
+          delegation = json.loads(pathlib.Path("keys/delegation.json").read_text())
+          lines = [l for l in pathlib.Path("keys/release.pub").read_text().splitlines() if l and not l.startswith("#")]
+          release_pub = lines[-1].strip()
+          now = datetime.datetime.now(datetime.timezone.utc)
+          ok = False
+          for k in delegation["online_keys"]:
+              if k["pub"] != release_pub:
+                  continue
+              if k["id"] in delegation.get("revoked", []):
+                  raise SystemExit("keys/release.pub is revoked in keys/delegation.json")
+              if datetime.datetime.fromisoformat(k["not_after"].replace("Z", "+00:00")) <= now:
+                  raise SystemExit("keys/release.pub delegation has expired (not_after)")
+              ok = True
+          if not ok:
+              raise SystemExit("keys/release.pub is not listed in keys/delegation.json")
+          print("keys/release.pub is delegated and current")
+          PY
+
+      # PLACEHOLDER: reach Infisical.
+      #
+      # Infisical for this project runs on a LAN only host that a GitHub
+      # hosted runner cannot reach. The audited recommendation is to join the
+      # tailnet from the job as an ephemeral node, with an ACL that lets the
+      # tag reach only the Infisical host on 443. The OAuth client secret for
+      # that lives as an ENVIRONMENT secret (release-signing), so a pull
+      # request can never use it, and it grants network reach only, not
+      # signing ability. Set the repository variable
+      # RELEASE_SIGNING_BRIDGE=tailscale to enable this step.
+      #
+      # The alternative is a self-hosted runner on the LAN selected with
+      # runs-on for this job only. Weigh it carefully: a self-hosted runner in
+      # a PUBLIC repository executes whatever a workflow asks, so it must be
+      # ephemeral, isolated on its own VLAN, and must never be selectable by
+      # ci.yml or by a pull request.
+      - name: Join tailnet (placeholder bridge to LAN Infisical)
+        if: vars.RELEASE_SIGNING_BRIDGE == 'tailscale'
+        uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci-release-signing
+          version: 1.104.4
+          # Ephemeral nodes are removed from the tailnet when the job ends.
+          args: "--ssh=false"
+          tailscaled-args: "--state=mem:"
+
+      # PLACEHOLDER: Infisical KMS signing.
+      #
+      # Call shapes below were read from the Infisical backend source
+      # (backend/src/server/routes/v1/cmek-router.ts and
+      # identity-oidc-auth-router.ts) on 2026-11-16. The cmek router is
+      # mounted at /api/v1/kms. ED25519 signs the whole message, so
+      # isDigest must be false and "data" is the base64 of manifest.json
+      # itself (limit 1 MiB; the manifest is a few KiB). ED25519 is not plan
+      # gated; only the ML-DSA algorithms are.
+      - name: Sign manifest with Infisical KMS (placeholder)
+        id: kms_sign
+        run: |
+          set -euo pipefail
+          umask 077
+
+          # 1. GitHub mints an OIDC token for this job. Its "sub" claim is
+          #    repo:wxalerts@245692446/pws-gateway@1460271447:environment:release-signing
+          #    (GitHub's immutable form with owner and repository ids) and its
+          #    "aud" claim is what we request here; the Infisical identity is
+          #    configured to require both.
+          jwt=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${INFISICAL_OIDC_AUDIENCE}" | jq -r .value)
+
+          # 2. Exchange it for a short lived Infisical access token.
+          #    POST /api/v1/auth/oidc-auth/login  {"identityId", "jwt"}
+          #    200 {"accessToken", "expiresIn", "accessTokenMaxTTL", "tokenType": "Bearer"}
+          access_token=$(curl -sSf -X POST "${INFISICAL_URL}/api/v1/auth/oidc-auth/login" \
+            -H "Content-Type: application/json" \
+            --data "$(jq -cn --arg id "$INFISICAL_IDENTITY_ID" --arg jwt "$jwt" '{identityId: $id, jwt: $jwt}')" \
+            | jq -r .accessToken)
+          [ -n "$access_token" ] && [ "$access_token" != "null" ]
+          echo "::add-mask::$access_token"
+          auth=(-H "Authorization: Bearer ${access_token}")
+
+          # 3. Fetch the KMS key's public key and prove it is the delegated
+          #    one. GET /api/v1/kms/keys/{keyId}/public-key -> {"publicKey"}
+          #    where publicKey is base64 of the DER SPKI (44 bytes for
+          #    Ed25519: a fixed 12 byte prefix then the 32 raw key bytes).
+          curl -sSf "${auth[@]}" "${INFISICAL_URL}/api/v1/kms/keys/${INFISICAL_KMS_KEY_ID}/public-key" \
+            | jq -r .publicKey | base64 -d > /tmp/kms-pub.der
+          [ "$(wc -c < /tmp/kms-pub.der)" -eq 44 ]
+          kms_raw=$(tail -c 32 /tmp/kms-pub.der | base64 -w0)
+          release_pub=$(grep -v '^#' keys/release.pub | tail -n1)
+          if [ "$kms_raw" != "$release_pub" ]; then
+            echo "KMS key ${INFISICAL_KMS_KEY_ID} does not match keys/release.pub" >&2
+            exit 1
+          fi
+          echo "KMS public key matches keys/release.pub"
+
+          # 4. Sign. POST /api/v1/kms/keys/{keyId}/sign
+          #    {"data": "<base64 manifest bytes>", "signingAlgorithm": "ED25519", "isDigest": false}
+          #    200 {"signature": "<base64 raw 64 byte signature>", "keyId", "signingAlgorithm"}
+          data_b64=$(base64 -w0 dist/manifest.json)
+          sig_b64=$(curl -sSf -X POST "${auth[@]}" -H "Content-Type: application/json" \
+            "${INFISICAL_URL}/api/v1/kms/keys/${INFISICAL_KMS_KEY_ID}/sign" \
+            --data "$(jq -cn --arg d "$data_b64" '{data: $d, signingAlgorithm: "ED25519", isDigest: false}')" \
+            | jq -r .signature)
+          [ -n "$sig_b64" ] && [ "$sig_b64" != "null" ]
+          printf '%s\n' "$sig_b64" > dist/manifest.json.sig
+
+          # 5. Self-check, server side. POST /api/v1/kms/keys/{keyId}/verify
+          #    {"data", "signature", "signingAlgorithm": "ED25519", "isDigest": false}
+          #    200 {"signatureValid": true|false, "keyId", "signingAlgorithm"}
+          valid=$(curl -sSf -X POST "${auth[@]}" -H "Content-Type: application/json" \
+            "${INFISICAL_URL}/api/v1/kms/keys/${INFISICAL_KMS_KEY_ID}/verify" \
+            --data "$(jq -cn --arg d "$data_b64" --arg s "$sig_b64" '{data: $d, signature: $s, signingAlgorithm: "ED25519", isDigest: false}')" \
+            | jq -r .signatureValid)
+          [ "$valid" = "true" ]
+          echo "KMS verify reports signatureValid=true"
+
+          # 6. Revoke the access token; nothing else needs the session.
+          #    POST /api/v1/auth/token/revoke {"accessToken"}
+          curl -sS -X POST "${INFISICAL_URL}/api/v1/auth/token/revoke" \
+            -H "Content-Type: application/json" \
+            --data "$(jq -cn --arg t "$access_token" '{accessToken: $t}')" > /dev/null || true
+
+      - name: Verify signature locally against keys/release.pub
+        # Independent of Infisical: exactly the check a device performs,
+        # done here with OpenSSL so a wrong key or a corrupt signature
+        # fails the job instead of reaching the fleet.
+        run: |
+          set -euo pipefail
+          { echo -n '302a300506032b6570032100' | xxd -r -p; grep -v '^#' keys/release.pub | tail -n1 | base64 -d; } > /tmp/release.der
+          base64 -d dist/manifest.json.sig > /tmp/manifest.sig
+          [ "$(wc -c < /tmp/manifest.sig)" -eq 64 ]
+          openssl pkeyutl -verify -rawin -pubin -keyform DER -inkey /tmp/release.der \
+            -in dist/manifest.json -sigfile /tmp/manifest.sig
+          cp keys/delegation.json keys/delegation.json.sig keys/root.pub keys/root-backup.pub keys/release.pub dist/
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-signed
+          path: |
+            dist/manifest.json.sig
+            dist/delegation.json
+            dist/delegation.json.sig
+            dist/root.pub
+            dist/root-backup.pub
+            dist/release.pub
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish
+    runs-on: ubuntu-24.04
+    needs: [build, sign]
+    # Publish even when signing is disabled (skipped), but never when it ran
+    # and failed: a failed signature must not become a half published release.
+    if: always() && needs.build.result == 'success' && (needs.sign.result == 'success' || needs.sign.result == 'skipped')
+    permissions:
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-dist
+          path: dist
+
+      - name: Download signed artifacts
+        if: needs.sign.result == 'success'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-signed
+          path: dist
+
+      - name: Fetch rtl_433 source tarball
+        # GPL-2.0-or-later requires the corresponding source for the rtl_433
+        # build that ships in the pws-rtl433 image. The tag and checksum are
+        # read from the Dockerfile so the two cannot drift apart.
+        run: |
+          set -euo pipefail
+          tag=$(sed -n 's/^ARG RTL433_VERSION=\(.*\)$/\1/p' deploy/rtl433/Dockerfile)
+          sha=$(sed -n 's/^ARG RTL433_SHA256=\(.*\)$/\1/p' deploy/rtl433/Dockerfile)
+          [ -n "$tag" ] && [ -n "$sha" ]
+          curl -sSL -o "dist/rtl_433-${tag}-source.tar.gz" \
+            "https://github.com/merbanan/rtl_433/archive/refs/tags/${tag}.tar.gz"
+          echo "${sha}  dist/rtl_433-${tag}-source.tar.gz" | sha256sum -c -
+          cp deploy/rtl433/Dockerfile "dist/rtl_433-${tag}-build-recipe.Dockerfile"
+
+      - name: Release notes
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          SIGNED: ${{ needs.sign.result }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## WxAlerts PWS Gateway ${VERSION}"
+            echo
+            if [ "$SIGNED" = "success" ]; then
+              echo "Signed release. Devices verify manifest.json.sig (raw Ed25519) against the delegated online key, which is itself signed by the offline root key pinned on the device."
+            else
+              echo "UNSIGNED build. RELEASE_SIGNING_ENABLED was not true when this ran. Devices will not install this release."
+            fi
+            echo
+            echo "Container images: \`${GATEWAY_IMAGE}:${VERSION}\` and \`${RTL433_IMAGE}:${VERSION}\`."
+            echo
+            echo "The rtl_433 source tarball and build recipe are attached to satisfy the GPL, see NOTICE."
+            echo
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
+          } > release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
+        with:
+          name: v${{ needs.build.outputs.version }}
+          body_path: release-notes.md
+          prerelease: ${{ needs.build.outputs.prerelease == 'true' }}
+          # An unsigned release stays a draft so it is never the "latest"
+          # release that a human might download by mistake.
+          draft: ${{ needs.sign.result != 'success' }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/pws-gateway_*.tar.gz
+            dist/pwsgw-linux-*
+            dist/manifest.json
+            dist/manifest.json.sig
+            dist/delegation.json
+            dist/delegation.json.sig
+            dist/*.pub
+            dist/*.sbom.spdx.json
+            dist/SHA256SUMS
+            dist/rtl_433-*
+
+      # PLACEHOLDER: object storage upload.
+      #
+      # Devices fetch manifest.json, manifest.json.sig and the bundles
+      # from object storage behind a CDN, not from GitHub. RELEASE_BUCKET is
+      # a repository variable such as "s3://bucket/pws-gateway" or
+      # "r2://bucket". Credentials are not configured here on purpose; when
+      # the bucket is chosen, authenticate with OIDC to the provider (AWS,
+      # Cloudflare R2 via a token in Infisical, etc.) and keep write access
+      # scoped to the release prefix. Until then this step only lists what
+      # would be uploaded.
+      - name: Upload to object storage (placeholder)
+        if: needs.sign.result == 'success'
+        env:
+          RELEASE_BUCKET: ${{ vars.RELEASE_BUCKET }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RELEASE_BUCKET:-}" ]; then
+            echo "RELEASE_BUCKET is not set; skipping object storage upload." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "Would upload to ${RELEASE_BUCKET}/releases/${VERSION}/ and update ${RELEASE_BUCKET}/channels/stable/manifest.json:"
+          ls -l dist/
+          echo "Object storage upload is a placeholder; see docs/release-signing.md." | tee -a "$GITHUB_STEP_SUMMARY"

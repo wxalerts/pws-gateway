@@ -1,0 +1,135 @@
+# golangci-lint v2 configuration.
+#
+# Checked with "golangci-lint config verify" against the version pinned in
+# .github/workflows/ci.yml. The set leans toward correctness and security
+# rather than style nits: a weather gateway on a Pi that updates itself has
+# to get errors, contexts and HTTP bodies right.
+
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - errcheck
+    - errorlint
+    - gocritic
+    - gocyclo
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - noctx
+    - revive
+    - staticcheck
+    - unparam
+    - unused
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+      disabled-checks:
+        # Too noisy for small structs passed by value on purpose.
+        - hugeParam
+    gocyclo:
+      # Decoder mapping tables and the collector state machine are the
+      # places this will bite; split them rather than raise it.
+      min-complexity: 20
+    gosec:
+      excludes:
+        # G104 duplicates errcheck.
+        - G104
+        # G304 (file inclusion via variable) fires on every config and
+        # testdata path. Paths come from flags and the config file, not
+        # from the network.
+        - G304
+        # G204 (subprocess launched with variable) is how rtl_433 is
+        # started. The arguments are built from typed config, never from
+        # MQTT payloads; AGENTS.md rule 4 forbids remote commands.
+        - G204
+      config:
+        G301: "0750"
+        G302: "0640"
+        G306: "0640"
+    govet:
+      enable-all: true
+      disable:
+        # fieldalignment is a micro optimisation that hurts readability of
+        # the contract types.
+        - fieldalignment
+    misspell:
+      locale: US
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+          arguments: ["checkPrivateReceivers", "disableStutteringCheck"]
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: redefines-builtin-id
+        - name: unused-parameter
+    staticcheck:
+      checks:
+        - all
+    unparam:
+      check-exported: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - std-error-handling
+    rules:
+      # Tests may ignore Close errors, use weak randomness and build
+      # subprocess arguments freely; they never ship.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - noctx
+          - unparam
+      # Simulators and dev tools are operator run, not device code.
+      - path: ^tools/
+        linters:
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/wxalerts/pws-gateway
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

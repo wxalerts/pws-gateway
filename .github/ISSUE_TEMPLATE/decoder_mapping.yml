@@ -1,0 +1,57 @@
+name: Decoder mapping request
+description: An rtl_433 decoder emits fields the gateway does not map to the canonical observation yet.
+title: "[mapping] "
+labels: [decoder-mapping]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The gateway maps each rtl_433 model's fields onto the canonical
+        observation fields in docs/contract/. A mapping request needs a real
+        JSON line from rtl_433 so the mapping can be tested from a recording,
+        not from a live radio. Capture one with:
+
+            rtl_433 -F json -M time:utc -M protocol -C si
+
+        Remove or alter the "id" field if you prefer not to publish your
+        sensor's identifier.
+  - type: input
+    id: model
+    attributes:
+      label: rtl_433 model
+      description: The exact "model" value from the JSON line.
+      placeholder: "Fineoffset-WH65B"
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sample JSON line(s)
+      description: One or more complete lines. Several lines over a few minutes help with rain and wind, which accumulate.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: fields
+    attributes:
+      label: Which canonical fields
+      description: |
+        Which rtl_433 fields map to which canonical fields, and any unit
+        notes. Example: "temperature_C -> air_temperature (C), humidity ->
+        relative_humidity, wind_avg_km_h -> wind_speed (convert to m/s),
+        rain_mm is a lifetime total, not an interval".
+    validations:
+      required: true
+  - type: input
+    id: station
+    attributes:
+      label: Station this comes from
+      placeholder: "Ambient Weather WS-2902"
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: The sample line is real rtl_433 output, not hand edited (apart from the id).
+          required: true
+        - label: I can test a build against this station, or I am fine with the mapping being tested only against the recording.

@@ -1,0 +1,93 @@
+# WxAlerts PWS Gateway daemon (bare-metal install, used by the SD image).
+#
+# Install:
+#   install -m 0755 pwsgw /usr/local/bin/pwsgw
+#   useradd --system --home /var/lib/pwsgw --shell /usr/sbin/nologin \
+#           --groups plugdev pwsgw
+#   install -m 0644 pwsgw.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now pwsgw
+#
+# The unit is hardened so a bug in the daemon cannot touch the rest of the
+# system. Check the effective exposure with: systemd-analyze security pwsgw
+
+[Unit]
+Description=WxAlerts PWS Gateway
+Documentation=https://github.com/wxalerts/pws-gateway
+After=network-online.target time-sync.target
+Wants=network-online.target time-sync.target
+
+[Service]
+Type=notify
+# Type=notify expects the daemon to call sd_notify(READY=1); fall back to
+# Type=simple if that is not implemented yet.
+NotifyAccess=main
+ExecStart=/usr/local/bin/pwsgw --config /etc/pwsgw/config.yaml
+Restart=always
+RestartSec=5s
+TimeoutStopSec=30s
+
+User=pwsgw
+Group=pwsgw
+# plugdev matches the group deploy/udev/99-rtl-sdr.rules assigns to the
+# dongle, so the daemon can start rtl_433 against it without root.
+SupplementaryGroups=plugdev
+
+# systemd creates these with the right owner. The daemon receives their
+# paths in $STATE_DIRECTORY, $CONFIGURATION_DIRECTORY, $LOGS_DIRECTORY and
+# $RUNTIME_DIRECTORY. The database, outbox and the staged update live under
+# the state directory, which is the only persistent path that is writable.
+StateDirectory=pwsgw
+StateDirectoryMode=0750
+ConfigurationDirectory=pwsgw
+LogsDirectory=pwsgw
+RuntimeDirectory=pwsgw
+WorkingDirectory=/var/lib/pwsgw
+
+# Filesystem
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+UMask=0027
+
+# Devices: only USB (the SDR dongles). PrivateDevices would hide them.
+PrivateDevices=no
+DevicePolicy=closed
+DeviceAllow=char-usb_device rw
+
+# Privileges. CAP_NET_BIND_SERVICE lets the UI listen on 443 as a plain user.
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+
+# Network: AF_NETLINK is needed to notice dongles being plugged in (udev).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+IPAddressAllow=any
+
+# Syscalls
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
+# Resource limits sized for a Pi 3B+ with 1 GB RAM. The SQLite cache and the
+# outbox are bounded in the daemon's own config.
+MemoryMax=512M
+TasksMax=256
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

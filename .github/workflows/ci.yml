@@ -1,0 +1,199 @@
+# Continuous integration for pull requests and pushes to main.
+#
+# Every job runs on a free GitHub hosted runner (public repository). No job
+# receives secrets, so a pull request from a fork gets the same checks as a
+# push by a maintainer. Release signing lives in release.yml.
+#
+# Each third-party action is pinned to a full commit SHA with the tag it
+# resolves to in a trailing comment. Dependabot keeps both in sync.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned here rather than "latest" so the .golangci.yml schema and the
+  # binary that checks it move together. Verified locally with the same
+  # version using "golangci-lint config verify".
+  GOLANGCI_LINT_VERSION: v2.6.2
+  NODE_VERSION: "20"
+
+jobs:
+  go:
+    name: Go (amd64)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          # The module has no go.sum until the first dependency lands.
+          cache: ${{ hashFiles('go.sum') != '' }}
+
+      - name: gofmt
+        run: |
+          files=$(find . -name '*.go' -not -path './web/*')
+          if [ -z "$files" ]; then
+            echo "No Go files yet, skipping gofmt."
+            exit 0
+          fi
+          unformatted=$(gofmt -l $files)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: golangci-lint
+        # golangci-lint exits non-zero when there is nothing to analyse, so
+        # wait for the first Go file before enabling it.
+        if: hashFiles('**/*.go') != ''
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        run: go test -race ./...
+
+  go-arm64:
+    # Native arm64 build and test on the architecture the gateway ships to.
+    # GitHub hosted Linux arm64 runners are free for public repositories; see
+    # docs/ci.md for the reference that was checked.
+    name: Go (arm64)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: ${{ hashFiles('go.sum') != '' }}
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        run: go test -race ./...
+
+  web:
+    name: Web UI
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        if: hashFiles('web/package.json') != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: npm ci
+        if: hashFiles('web/package.json') != ''
+        working-directory: web
+        run: npm ci
+
+      - name: npm run lint
+        if: hashFiles('web/package.json') != ''
+        working-directory: web
+        run: npm run lint
+
+      - name: npm run build
+        if: hashFiles('web/package.json') != ''
+        working-directory: web
+        run: npm run build
+
+      - name: npm test
+        if: hashFiles('web/package.json') != ''
+        working-directory: web
+        run: npm test
+
+      - name: Web UI not present yet
+        if: hashFiles('web/package.json') == ''
+        run: echo "web/package.json not found, web checks skipped."
+
+  schemas:
+    name: Schemas
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        if: hashFiles('tools/schemacheck/*.go') != ''
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: ${{ hashFiles('go.sum') != '' }}
+
+      - name: make schemas
+        if: hashFiles('tools/schemacheck/*.go') != ''
+        run: make schemas
+
+      - name: Schema checker not present yet
+        if: hashFiles('tools/schemacheck/*.go') == ''
+        run: echo "tools/schemacheck not found, schema validation skipped."
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: ${{ hashFiles('go.sum') != '' }}
+
+      - name: Run govulncheck
+        if: hashFiles('**/*.go') != ''
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          govulncheck ./...
+
+      - name: No Go code yet
+        if: hashFiles('**/*.go') == ''
+        run: echo "No Go files yet, govulncheck skipped."
+
+  deploy:
+    # Cheap checks on the container and compose files so a typo does not wait
+    # for the next release to surface. "docker build --check" runs the
+    # Dockerfile linter without executing any build stage.
+    name: Deploy files
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Lint Dockerfiles
+        run: |
+          docker build --check -f deploy/Dockerfile .
+          docker build --check -f deploy/rtl433/Dockerfile deploy
+
+      - name: Validate compose file
+        run: docker compose -f deploy/docker-compose.yml config --quiet
