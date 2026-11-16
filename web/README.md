@@ -7,7 +7,7 @@ JSON API under `/api/`.
 
 ## Toolchain
 
-- Node 20 LTS (20.19 or newer) and npm 9 or newer.
+- Node 22 LTS (22.22.2 or newer) and npm 9 or newer.
 - `npm ci` installs the exact versions in `package-lock.json`.
 
 ## Commands

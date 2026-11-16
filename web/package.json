@@ -5,7 +5,7 @@
   "description": "Local web UI for the WxAlerts PWS Gateway, served from the Pi by the Go daemon",
   "type": "module",
   "engines": {
-    "node": ">=20.19"
+    "node": "^22.22.2 || >=24.15.0"
   },
   "scripts": {
     "dev": "vite",
@@ -28,20 +28,20 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
-    "@types/node": "^20.19.0",
+    "@types/node": "^22.12.0",
     "@types/react": "^18.3.20",
     "@types/react-dom": "^18.3.6",
-    "@vitejs/plugin-react": "^4.5.0",
+    "@vitejs/plugin-react": "^6.3.0",
     "eslint": "^9.39.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.5.7",
-    "globals": "^16.0.0",
+    "globals": "^17.14.0",
     "jsdom": "^31.0.1",
     "prettier": "^3.5.0",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.35.0",
-    "vite": "^6.3.0",
-    "vitest": "^3.2.0"
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
   }
 }
