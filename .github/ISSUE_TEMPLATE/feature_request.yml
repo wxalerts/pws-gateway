@@ -1,0 +1,50 @@
+name: Feature request
+description: Propose something the gateway should do.
+title: "[feature] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, check docs/out-of-scope-v1.md. Davis stations, an
+        onboarding wizard, listen mode and non-Pi boards are deliberately
+        deferred; a request for one of those is welcome but will be parked
+        until v1 ships.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can you not do today, and who else is likely to hit it?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should the gateway do? If it touches the MQTT contract or the web UI, say so.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which part of the gateway
+      multiple: true
+      options:
+        - Receiving (rtl_433, dongles, decoders)
+        - Storage (SQLite, rollups, SD card wear)
+        - Uplink (MQTT contract, outbox)
+        - Web UI
+        - Updates and signing
+        - SD image and install
+        - Documentation
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I read docs/out-of-scope-v1.md and this is not listed there, or I accept it will wait for v1.
+          required: true

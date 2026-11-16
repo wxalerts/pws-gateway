@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and setup help
+    url: https://github.com/wxalerts/pws-gateway/discussions
+    about: Ask in Discussions. Issues are for confirmed bugs, feature requests and compatibility reports.
+  - name: Security vulnerability
+    url: https://github.com/wxalerts/pws-gateway/security/advisories/new
+    about: Report privately through GitHub security advisories, never in a public issue. See SECURITY.md.

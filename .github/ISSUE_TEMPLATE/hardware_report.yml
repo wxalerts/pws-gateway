@@ -1,0 +1,69 @@
+name: Hardware compatibility report
+description: Tell us a board, dongle, hub or station combination works, or does not.
+title: "[hardware] "
+labels: [hardware]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports that something works are as useful as reports that it does
+        not. They feed docs/hardware.md.
+  - type: dropdown
+    id: board
+    attributes:
+      label: Board
+      options:
+        - Raspberry Pi 3B+
+        - Raspberry Pi 4
+        - Raspberry Pi 5
+        - Other (name it below; not supported in v1 but good to know)
+    validations:
+      required: true
+  - type: input
+    id: dongle
+    attributes:
+      label: SDR dongle
+      description: Brand, model, tuner chip if known, TCXO or not. Include the USB vendor:product id from "lsusb" if you can.
+      placeholder: "Nooelec NESDR SMArt v5, R820T2, TCXO, 0bda:2838"
+    validations:
+      required: true
+  - type: input
+    id: hub
+    attributes:
+      label: USB hub
+      description: Brand and model, powered or not. Write "none" if the dongle is plugged straight into the Pi.
+      placeholder: "none"
+    validations:
+      required: true
+  - type: input
+    id: station
+    attributes:
+      label: Weather station model
+      description: The sensor array or console, and the rtl_433 decoder name it shows up as if you know it.
+      placeholder: "Ambient Weather WS-2902 (Fineoffset-WH65B)"
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Works, all sensors decoded
+        - Works, some sensors missing or wrong
+        - Dongle detected but no packets
+        - Dongle not detected
+        - Other (explain below)
+    validations:
+      required: true
+  - type: input
+    id: gateway_version
+    attributes:
+      label: Gateway version
+      placeholder: "0.3.2"
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Distance to the station, antenna, signal level reported, anything you had to change.

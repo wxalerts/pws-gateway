@@ -1,0 +1,71 @@
+name: Bug report
+description: Something the gateway does wrong on a supported board.
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please fill in the hardware and version fields
+        even when they feel irrelevant; most bugs turn out to be specific to a
+        board, an OS image or a dongle.
+
+        Do not paste credentials, MQTT passwords or your station's exact
+        coordinates. The support bundle already strips them.
+  - type: dropdown
+    id: board
+    attributes:
+      label: Board
+      options:
+        - Raspberry Pi 3B+
+        - Raspberry Pi 4
+        - Raspberry Pi 5
+        - Other (say which in the description; v1 supports only the boards above)
+    validations:
+      required: true
+  - type: input
+    id: os_image
+    attributes:
+      label: OS image version
+      description: From Settings, About in the web UI, or "cat /etc/pwsgw-image-release" on the device.
+      placeholder: "pwsgw-image 2026.11.1 (Raspberry Pi OS Lite 64-bit)"
+    validations:
+      required: true
+  - type: input
+    id: gateway_version
+    attributes:
+      label: Gateway version
+      description: From Settings, About, or "pwsgw --version".
+      placeholder: "0.3.2"
+    validations:
+      required: true
+  - type: input
+    id: dongle
+    attributes:
+      label: SDR dongle(s)
+      description: Model and, if you know it, the tuner chip. Mention a USB hub if one is in use.
+      placeholder: "RTL-SDR Blog V4 (R828D), one dongle, no hub"
+    validations:
+      required: true
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what the gateway did instead.
+    validations:
+      required: true
+  - type: textarea
+    id: support_bundle
+    attributes:
+      label: Support bundle
+      description: |
+        Download it from Settings, Support bundle in the web UI and attach the
+        file here (drag and drop). It contains logs, config with secrets
+        removed, and the last hour of decoder output. Without it most bugs
+        cannot be reproduced.
+      placeholder: Attach pwsgw-support-YYYYMMDD.tar.gz
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Station model, antenna placement, how long the gateway had been running, recent changes.
