@@ -57,7 +57,7 @@ func syncDir(dir string) error {
 	if err != nil {
 		return fmt.Errorf("atomicfile: open dir: %w", err)
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 	if err := d.Sync(); err != nil && !isUnsupported(err) {
 		return fmt.Errorf("atomicfile: fsync dir: %w", err)
 	}
