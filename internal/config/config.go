@@ -83,7 +83,8 @@ type Radio struct {
 // in Config.Stations is the discovery key (model/id/channel) produced by the
 // collector.
 type Station struct {
-	// Selected marks the station whose readings are uplinked.
+	// Selected marks a station whose readings are stored and uplinked. Any
+	// number of stations may be selected.
 	Selected bool `json:"selected"`
 	// Name is a free text label shown in the UI.
 	Name string `json:"name"`
@@ -237,7 +238,6 @@ func (c *Config) validateRadios(ve *ValidationError) {
 }
 
 func (c *Config) validateStations(ve *ValidationError) {
-	selected := 0
 	for key, s := range c.Stations {
 		if !reKey.MatchString(key) {
 			ve.add("stations key %q is not a valid station key", key)
@@ -251,12 +251,6 @@ func (c *Config) validateStations(ve *ValidationError) {
 		if s.WindHeightM < 0 || s.WindHeightM > 100 {
 			ve.add("stations[%s].wind_height_m %v out of range", key, s.WindHeightM)
 		}
-		if s.Selected {
-			selected++
-		}
-	}
-	if selected > 1 {
-		ve.add("only one station may be selected, found %d", selected)
 	}
 }
 

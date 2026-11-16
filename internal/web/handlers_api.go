@@ -158,13 +158,6 @@ func (s *Server) handleStationPut(w http.ResponseWriter, r *http.Request) {
 	cfg, err := s.opts.Config.Update(func(c *config.Config) error {
 		st := c.Stations[key]
 		if in.Selected != nil {
-			if *in.Selected {
-				// Only one station may be uplinked.
-				for k, o := range c.Stations {
-					o.Selected = false
-					c.Stations[k] = o
-				}
-			}
 			st.Selected = *in.Selected
 		}
 		if in.Name != nil {

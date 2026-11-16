@@ -368,12 +368,12 @@ func TestStationsMergeAndPut(t *testing.T) {
 	if !got.Selected || got.Name != "Roof" || got.AltM != 12.5 {
 		t.Fatalf("config = %+v", got)
 	}
-	// Selecting another station moves the selection.
+	// Selecting another station keeps the first one selected.
 	if r := e.do("PUT", "/api/stations/Fine/2", `{"selected":true}`, c); r.Code != 200 {
 		t.Fatalf("put 2: %d %s", r.Code, r.Body)
 	}
 	st := e.cfg.Get().Stations
-	if st["Acurite-5n1/1/12"].Selected || !st["Fine/2"].Selected || st["Acurite-5n1/1/12"].Name != "Roof" {
+	if !st["Acurite-5n1/1/12"].Selected || !st["Fine/2"].Selected || st["Acurite-5n1/1/12"].Name != "Roof" {
 		t.Fatalf("stations = %+v", st)
 	}
 	e.do("GET", "/api/stations", "", c).json(&list)

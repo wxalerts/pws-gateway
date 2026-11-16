@@ -248,3 +248,14 @@ func TestApplySectionsAtomic(t *testing.T) {
 		t.Fatalf("unknown section: %v", err)
 	}
 }
+
+func TestSeveralStationsMayBeSelected(t *testing.T) {
+	c := Defaults()
+	c.Stations["Acurite-5n1:1:A"] = Station{Selected: true}
+	c.Stations["Acurite-609TXC:224:"] = Station{Selected: true}
+	c.Stations["WxAlerts-WxLink:1:"] = Station{Selected: true}
+	c.Stations["Neighbour:9:"] = Station{}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("three selected stations should validate: %v", err)
+	}
+}
