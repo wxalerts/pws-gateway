@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/wxalerts/pws-gateway/internal/app"
 	"github.com/wxalerts/pws-gateway/internal/auth"
 	"github.com/wxalerts/pws-gateway/internal/config"
 	"github.com/wxalerts/pws-gateway/internal/logging"
@@ -87,6 +88,8 @@ func envOr(name, def string) string {
 
 type runFlags struct {
 	dataDir, listen, redirect, logLevel string
+	rtl433Bin, replay                   string
+	replaySpeed                         float64
 }
 
 func parseFlags(name string, args []string) (runFlags, error) {
@@ -96,6 +99,9 @@ func parseFlags(name string, args []string) (runFlags, error) {
 	fs.StringVar(&f.listen, "listen", os.Getenv(envListen), "HTTPS listen address, default from config or "+defaultListen+" ("+envListen+")")
 	fs.StringVar(&f.redirect, "http-redirect", os.Getenv(envHTTPRedirect), "HTTP redirect address, default from config or "+defaultRedirect+" ("+envHTTPRedirect+")")
 	fs.StringVar(&f.logLevel, "log-level", os.Getenv(envLogLevel), "debug, info, warn or error ("+envLogLevel+")")
+	fs.StringVar(&f.rtl433Bin, "rtl433-bin", "rtl_433", "rtl_433 executable, resolved from PATH when not a path")
+	fs.StringVar(&f.replay, "replay", "", "development: replay this rtl_433 JSONL file instead of starting rtl_433")
+	fs.Float64Var(&f.replaySpeed, "replay-speed", 10, "replay speed multiplier, 0 for as fast as possible")
 	if err := fs.Parse(args); err != nil {
 		return f, err
 	}
@@ -182,13 +188,25 @@ func runCmd(args []string) error {
 		logger.Warn("ignoring unreadable sessions file", "err", err)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	rt, err := app.New(app.Deps{
+		DataDir: f.dataDir, Config: cfgStore, Platform: plat, Logger: logger,
+		Rtl433Bin: f.rtl433Bin, ReplayFile: f.replay, ReplaySpeed: f.replaySpeed, ReplayRewriteTime: true,
+	})
+	if err != nil {
+		return err
+	}
+
 	dist, err := fs.Sub(webdist.Dist, "dist")
 	if err != nil {
 		return err
 	}
 	srv, err := web.New(web.Options{
 		Platform: plat, Config: cfgStore, Auth: authStore, Sessions: sessions,
-		Auditor: auth.Auditor{Logger: logger}, Logs: ring, Dist: dist, Logger: logger,
+		Auditor: auth.Auditor{Logger: logger}, Logs: ring, Dist: dist,
+		Stations: rt.Stations(), Readings: rt.Readings(), Status: rt.Status(), Logger: logger,
 		Version: version.Version, Commit: version.Commit, BuildDate: version.BuildDate,
 	})
 	if err != nil {
@@ -213,11 +231,19 @@ func runCmd(args []string) error {
 	}
 	logger.Info("web server listening", "https", httpsLn.Addr().String())
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 	go prune(ctx, sessions)
 
+	appDone := make(chan struct{})
+	go func() {
+		defer close(appDone)
+		if err := rt.Run(ctx); err != nil {
+			logger.Error("runtime stopped", "err", err)
+		}
+	}()
+
 	err = srv.Serve(ctx, httpsLn, redirLn, &cert)
+	stop()
+	<-appDone
 	logger.Info("pwsgw stopped")
 	return err
 }
