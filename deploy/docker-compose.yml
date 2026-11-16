@@ -1,0 +1,121 @@
+# Container deployment of the WxAlerts PWS Gateway on a Raspberry Pi.
+#
+# Two services:
+#   rtl433    owns the RTL-SDR dongle(s) and streams decoded JSON events over
+#             HTTP on an internal network (rtl_433 -F http, /stream endpoint).
+#   gateway   reads that stream, stores readings in SQLite on a volume and
+#             uplinks over MQTT. Serves the local web UI.
+#
+# The SD card image is the supported install path for station owners; this
+# file is for developers and for people who already run Docker on a Pi. Note
+# that the self-update mechanism manages the host install, not these
+# containers; pull a new tag to update here.
+#
+# Host prerequisites: deploy/udev/99-rtl-sdr.rules in /etc/udev/rules.d/ and
+# deploy/modprobe.d/blacklist-rtl-dvb.conf in /etc/modprobe.d/, otherwise the
+# kernel DVB driver grabs the dongle before rtl_433 can.
+#
+# Environment variable names given to the gateway are provisional until the
+# configuration spec (docs/spec) freezes them.
+
+name: pwsgw
+
+services:
+  rtl433:
+    image: ghcr.io/wxalerts/pws-rtl433:${PWSGW_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: rtl433/Dockerfile
+    restart: always
+    # The whole USB bus rather than one /dev/bus/usb/BBB/DDD node, because
+    # the device number changes every time the dongle is re-plugged.
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    command:
+      - -F
+      - http://0.0.0.0:8433
+      - -M
+      - time:utc
+      - -M
+      - protocol
+      - -M
+      - level
+      - -C
+      - si
+      # Frequency and hop settings for multi-band kits are managed by the
+      # gateway in the host install. For a single dongle on 433 MHz the
+      # rtl_433 default frequency is already correct.
+    networks:
+      - internal
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      # No curl in the image; bash can open a TCP socket to the HTTP output.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8433"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  gateway:
+    image: ghcr.io/wxalerts/pws-gateway:${PWSGW_VERSION:-latest}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: always
+    depends_on:
+      rtl433:
+        condition: service_healthy
+    environment:
+      TZ: UTC
+      PWSGW_DATA_DIR: /var/lib/pwsgw
+      PWSGW_RTL433_URL: http://rtl433:8433/stream
+      PWSGW_HTTP_ADDR: ":8080"
+      PWSGW_HTTPS_ADDR: ":8443"
+    ports:
+      # The container runs as non-root and cannot bind 80/443 itself.
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - pwsgw-data:/var/lib/pwsgw
+    networks:
+      - internal
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      # distroless has no shell, so the binary has to answer for itself.
+      # Expects a "pwsgw health" subcommand that exits 0 when the HTTP
+      # listener answers; see the daemon spec.
+      test: ["CMD", "/pwsgw", "health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  internal:
+    # rtl433 is reachable only from the gateway, never from the LAN.
+    internal: true
+
+volumes:
+  pwsgw-data:

@@ -1,0 +1,61 @@
+# udev rules for RTL2832U based SDR dongles used by the WxAlerts PWS Gateway.
+#
+# Gives the dongle to group plugdev (gid 46 on Debian and Raspberry Pi OS) with
+# mode 0660 and tags it as a software radio, so the pwsgw service user and the
+# rtl433 container can open it without root. Install to /etc/udev/rules.d/
+# and reload: udevadm control --reload-rules && udevadm trigger
+#
+# The vendor and product ids are the ones librtlsdr recognises. Pair the file
+# with deploy/modprobe.d/blacklist-rtl-dvb.conf, otherwise the kernel DVB
+# driver still claims the device first.
+
+ACTION!="add|change", GOTO="rtl_sdr_end"
+SUBSYSTEM!="usb", GOTO="rtl_sdr_end"
+
+# Generic RTL2832U (RTL-SDR Blog V3 and V4, Nooelec NESDR, most "RTL-SDR" kits)
+ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2832", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+# Rebranded RTL2832U TV tuners that work as SDRs
+ATTRS{idVendor}=="0413", ATTRS{idProduct}=="6680", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0413", ATTRS{idProduct}=="6f0f", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0458", ATTRS{idProduct}=="707f", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00a9", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b3", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b4", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b5", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b7", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b8", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00b9", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00c0", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00c6", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00d3", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00d7", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="0ccd", ATTRS{idProduct}=="00e0", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1554", ATTRS{idProduct}=="5020", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="15f4", ATTRS{idProduct}=="0131", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="15f4", ATTRS{idProduct}=="0133", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0620", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0650", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="185b", ATTRS{idProduct}=="0680", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d393", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d394", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d395", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d397", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d398", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d39d", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3a4", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3a8", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3af", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1b80", ATTRS{idProduct}=="d3b0", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1101", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1102", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1103", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1d19", ATTRS{idProduct}=="1104", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="a803", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="b803", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="c803", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="d286", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+ATTRS{idVendor}=="1f4d", ATTRS{idProduct}=="d803", ENV{ID_SOFTWARE_RADIO}="1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+LABEL="rtl_sdr_end"
