@@ -1,0 +1,30 @@
+# Go
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+
+# Web UI
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Local runtime state
+*.db
+*.db-wal
+*.db-shm
+/var/
+.env
+.env.*
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Keys. Never commit private keys. Public keys are pinned under keys/.
+*.key
+*.pem
+!keys/*.pub

@@ -1,0 +1,15 @@
+WxAlerts PWS Gateway
+Copyright (c) 2026 WxAlerts.org and contributors
+Licensed under the MIT License. See LICENSE.
+
+This project runs third-party tools as separate processes. They are not linked
+into the gateway binary and keep their own licenses:
+
+  rtl_433        GPL-2.0-or-later   https://github.com/merbanan/rtl_433
+  rtldavis       GPL-3.0            https://github.com/lheijst/rtldavis (optional module, not in v1)
+  librtlsdr      GPL-2.0            https://github.com/osmocom/rtl-sdr
+
+Release images and update bundles that include a build of any GPL tool ship the
+corresponding source, or a written offer for it, as that license requires. The
+release workflow attaches the exact source archive and build recipe to each
+GitHub Release.
