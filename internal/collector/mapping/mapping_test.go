@@ -209,16 +209,16 @@ func fmtFloat(v float64) string {
 	}
 }
 
-// TestWxLinkNode uses the line rtl_433 (wxalerts fork, protocol 291) prints for
-// the sample frame in testdata/wxlink. The generic rules carry the three
+// TestWxLinkNode uses a line the bench Pi decoded from the real screen node
+// with the wxalerts fork (protocol 291). The generic rules carry the three
 // canonical fields; the air quality and battery fields stay in Raw.
 func TestWxLinkNode(t *testing.T) {
-	line := `{"time" : "2026-11-16T20:00:00.000000Z", "protocol" : 291, "model" : "WxAlerts-WxLink", "id" : 1, "seq" : 4242, "temperature_C" : 21.370, "humidity" : 61.200, "pressure_hPa" : 1013.250, "iaq" : 52.000, "iaq_accuracy" : 3, "bvoc_ppm" : 0.550, "co2_ppm" : 612, "battery_mV" : 3800, "mic" : "CRC", "mod" : "ASK", "freq" : 433.92, "rssi" : -9.0, "snr" : 20.0, "noise" : -29.0}`
+	line := `{"time" : "2026-11-16T20:57:48.000000Z", "protocol" : 291, "model" : "WxAlerts-WxLink", "id" : 1, "seq" : 3542, "temperature_C" : 13.470, "humidity" : 56.090, "pressure_hPa" : 1023.680, "iaq" : 195.900, "iaq_accuracy" : 2, "bvoc_ppm" : 143.190, "co2_ppm" : 3753, "battery_mV" : 1716, "mic" : "CRC", "mod" : "ASK", "freq" : 433.980, "rssi" : 0.102, "snr" : 14.502, "noise" : -14.502}`
 	r := New().Map(decode(t, line), "radio0")
 	if r.StationKey() != "WxAlerts-WxLink:1:" {
 		t.Fatalf("key = %q", r.StationKey())
 	}
-	if !near(r.Fields[model.FieldTempC], 21.37) || !near(r.Fields[model.FieldHumidityPct], 61.2) || !near(r.Fields[model.FieldPressureHPa], 1013.25) {
+	if !near(r.Fields[model.FieldTempC], 13.47) || !near(r.Fields[model.FieldHumidityPct], 56.09) || !near(r.Fields[model.FieldPressureHPa], 1023.68) {
 		t.Fatalf("fields = %v", r.Fields)
 	}
 	for _, k := range []string{"iaq", "iaq_accuracy", "bvoc_ppm", "co2_ppm", "battery_mV", "seq", "mic"} {
