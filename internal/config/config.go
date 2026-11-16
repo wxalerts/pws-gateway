@@ -87,9 +87,9 @@ type Station struct {
 	Selected bool `json:"selected"`
 	// Name is a free text label shown in the UI.
 	Name string `json:"name"`
-	// AltM is the sensor altitude above sea level in metres (SI internally).
+	// AltM is the sensor altitude above sea level in meters (SI internally).
 	AltM float64 `json:"alt_m"`
-	// WindHeightM is the anemometer height above ground in metres.
+	// WindHeightM is the anemometer height above ground in meters.
 	WindHeightM float64 `json:"wind_height_m"`
 }
 
@@ -193,7 +193,20 @@ func (c *Config) Validate() error {
 	if c.SchemaVersion != SchemaVersion {
 		ve.add("schema_version must be %d, got %d", SchemaVersion, c.SchemaVersion)
 	}
+	c.validateWeb(&ve)
+	c.validateRadios(&ve)
+	c.validateStations(&ve)
+	c.validateUplink(&ve)
+	c.validateNetwork(&ve)
+	c.validateUpdates(&ve)
 
+	if len(ve.Problems) > 0 {
+		return &ve
+	}
+	return nil
+}
+
+func (c *Config) validateWeb(ve *ValidationError) {
 	if !reListen.MatchString(c.Web.Listen) {
 		ve.add("web.listen %q is not host:port", c.Web.Listen)
 	}
@@ -203,7 +216,9 @@ func (c *Config) Validate() error {
 	if (c.Web.CertFile == "") != (c.Web.KeyFile == "") {
 		ve.add("web.cert_file and web.key_file must be set together")
 	}
+}
 
+func (c *Config) validateRadios(ve *ValidationError) {
 	seen := map[string]bool{}
 	for i, r := range c.Radios {
 		if strings.TrimSpace(r.Serial) == "" {
@@ -219,7 +234,9 @@ func (c *Config) Validate() error {
 			ve.add("radios[%d].band_mhz %v must be between 300 and 1000", i, r.BandMHz)
 		}
 	}
+}
 
+func (c *Config) validateStations(ve *ValidationError) {
 	selected := 0
 	for key, s := range c.Stations {
 		if !reKey.MatchString(key) {
@@ -241,7 +258,9 @@ func (c *Config) Validate() error {
 	if selected > 1 {
 		ve.add("only one station may be selected, found %d", selected)
 	}
+}
 
+func (c *Config) validateUplink(ve *ValidationError) {
 	if c.Uplink.BrokerURL != "" {
 		if err := validateBrokerURL(c.Uplink.BrokerURL); err != nil {
 			ve.add("uplink.broker_url: %v", err)
@@ -257,7 +276,9 @@ func (c *Config) Validate() error {
 	if c.History.CadenceMinutes > 24*60 {
 		ve.add("history.cadence_minutes %d is more than a day", c.History.CadenceMinutes)
 	}
+}
 
+func (c *Config) validateNetwork(ve *ValidationError) {
 	if err := c.Network.Current.validate(); err != nil {
 		ve.add("network.current: %v", err)
 	}
@@ -269,7 +290,9 @@ func (c *Config) Validate() error {
 	if c.Network.ConfirmDeadline != nil && c.Network.Pending == nil {
 		ve.add("network.confirm_deadline set without network.pending")
 	}
+}
 
+func (c *Config) validateUpdates(ve *ValidationError) {
 	if !reWindow.MatchString(c.Updates.Window) {
 		ve.add("updates.window %q must be HH:MM-HH:MM", c.Updates.Window)
 	}
@@ -282,11 +305,6 @@ func (c *Config) Validate() error {
 			ve.add("homeassistant.broker_url: %v", err)
 		}
 	}
-
-	if len(ve.Problems) > 0 {
-		return &ve
-	}
-	return nil
 }
 
 func (n NetworkSettings) validate() error {

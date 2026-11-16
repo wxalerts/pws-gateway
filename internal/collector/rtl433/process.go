@@ -29,7 +29,7 @@ type Radio struct {
 	// Serial selects the dongle with "-d :<serial>". Empty means the first
 	// device rtl_433 finds, which is only safe with one dongle.
 	Serial string
-	// FrequencyHz is the centre frequency, normally Band433MHz or Band915MHz.
+	// FrequencyHz is the center frequency, normally Band433MHz or Band915MHz.
 	FrequencyHz int64
 	// Role is free text for the operator ("primary", "915 band").
 	Role string
@@ -41,7 +41,7 @@ type Radio struct {
 // 2026-11-16:
 //
 //	-d :<serial>   select the dongle by USB serial
-//	-f <hz>        centre frequency in Hz; an integer avoids locale issues
+//	-f <hz>        center frequency in Hz; an integer avoids locale issues
 //	-F json        one JSON object per line on stdout
 //	-M level       add rssi, snr and noise in dB to every line
 //	-M protocol    add the decoder number
@@ -84,7 +84,7 @@ type Process interface {
 // StartFunc launches a process. OSStart is the real one.
 type StartFunc func(ctx context.Context, name string, args []string) (Process, error)
 
-// OSStart runs the binary with os/exec. Cancelling ctx kills it.
+// OSStart runs the binary with os/exec. Canceling ctx kills it.
 func OSStart(ctx context.Context, name string, args []string) (Process, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	stdout, err := cmd.StdoutPipe()

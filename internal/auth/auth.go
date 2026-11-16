@@ -139,13 +139,21 @@ func HashPassword(pw string, p Params) (Hash, error) {
 	}, nil
 }
 
+// maxHashLen bounds a stored hash so its length converts safely to uint32.
+const maxHashLen = 1 << 20
+
 // Verify recomputes the hash with the stored parameters and compares in
 // constant time.
 func (h Hash) Verify(pw string) bool {
 	if h.Algorithm != "argon2id" || len(h.Hash) == 0 || len(h.Salt) == 0 {
 		return false
 	}
-	got := argon2.IDKey([]byte(pw), h.Salt, h.Time, h.MemoryKiB, h.Threads, uint32(len(h.Hash)))
+	// Stored hashes are 32 bytes; reject anything that could not fit a uint32 key length.
+	if len(h.Hash) > maxHashLen {
+		return false
+	}
+	keyLen := uint32(len(h.Hash)) //nolint:gosec // bounded by the maxHashLen check above
+	got := argon2.IDKey([]byte(pw), h.Salt, h.Time, h.MemoryKiB, h.Threads, keyLen)
 	return subtle.ConstantTimeCompare(got, h.Hash) == 1
 }
 
@@ -158,7 +166,7 @@ func (h Hash) PHC() string {
 		enc.EncodeToString(h.Salt), enc.EncodeToString(h.Hash))
 }
 
-// Store holds the account and serialises hashing.
+// Store holds the account and serializes hashing.
 type Store struct {
 	mu      sync.RWMutex
 	path    string

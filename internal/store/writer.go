@@ -122,11 +122,7 @@ func (w *Writer) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			fctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if err := w.Flush(fctx); err != nil {
-				w.opts.Logger.Error("final rollup flush failed", "err", err)
-			}
+			w.finalFlush()
 			return ctx.Err()
 		case <-t.C:
 		case <-w.kick:
@@ -134,5 +130,15 @@ func (w *Writer) Run(ctx context.Context) error {
 		if err := w.Flush(ctx); err != nil {
 			w.opts.Logger.Error("rollup flush failed, will retry", "err", err, "pending", w.Pending())
 		}
+	}
+}
+
+// finalFlush writes the open batch with a fresh context, because the run
+// context is already canceled when shutdown begins.
+func (w *Writer) finalFlush() {
+	fctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := w.Flush(fctx); err != nil {
+		w.opts.Logger.Error("final rollup flush failed", "err", err)
 	}
 }

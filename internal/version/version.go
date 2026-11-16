@@ -7,7 +7,7 @@
 //	  -X github.com/wxalerts/pws-gateway/internal/version.BuildDate=2026-01-02T03:04:05Z"
 //
 // A plain `go build` leaves the development defaults in place so that a dev
-// binary is always recognisable as one in logs and in the web UI.
+// binary is always recognizable as one in logs and in the web UI.
 package version
 
 // Version is the semantic version of the release, or "dev" for local builds.

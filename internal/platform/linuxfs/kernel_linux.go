@@ -15,7 +15,10 @@ func FSUsedPct(path string) (float64, error) {
 	if err := syscall.Statfs(path, &st); err != nil {
 		return 0, err
 	}
-	bsize := uint64(st.Bsize) //nolint:unconvert // Bsize is int64 on most arches, int32 on some.
+	if st.Bsize <= 0 {
+		return 0, errors.New("linuxfs: filesystem reports a non-positive block size")
+	}
+	bsize := uint64(st.Bsize)
 	used := (st.Blocks - st.Bfree) * bsize
 	avail := st.Bavail * bsize
 	if used+avail == 0 {

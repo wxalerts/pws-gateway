@@ -12,11 +12,13 @@ func TestParseLevel(t *testing.T) {
 	cases := map[string]slog.Level{
 		"":        slog.LevelInfo,
 		"DEBUG":   slog.LevelDebug,
-		" warn ":  slog.LevelWarn,
 		"warning": slog.LevelWarn,
 		"error":   slog.LevelError,
 		"bogus":   slog.LevelInfo,
 	}
+	// Surrounding whitespace is trimmed. Kept out of the map literal because
+	// gocritic flags whitespace in map keys.
+	cases[" warn "] = slog.LevelWarn
 	for in, want := range cases {
 		if got := ParseLevel(in); got != want {
 			t.Errorf("ParseLevel(%q) = %v, want %v", in, got, want)

@@ -108,7 +108,7 @@ func Validate(kind Kind, data []byte) error {
 	}
 	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidJSON, err)
+		return fmt.Errorf("%w: %w", ErrInvalidJSON, err)
 	}
 	if err := sch.Validate(doc); err != nil {
 		var ve *jsonschema.ValidationError

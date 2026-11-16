@@ -151,7 +151,7 @@ func TestSupervisorRestartsAfterDeviceLoss(t *testing.T) {
 	var sleptMu sync.Mutex
 	second := make(chan *fakeProc, 1)
 
-	start := func(ctx context.Context, name string, args []string) (Process, error) {
+	start := func(_ context.Context, name string, args []string) (Process, error) {
 		startsMu.Lock()
 		starts++
 		n := starts
@@ -188,7 +188,7 @@ func TestSupervisorRestartsAfterDeviceLoss(t *testing.T) {
 		Backoff: Backoff{
 			Min: time.Second, Max: time.Minute, Factor: 2, Jitter: 0, ResetAfter: time.Hour,
 		},
-		Sleep: func(ctx context.Context, d time.Duration) error {
+		Sleep: func(_ context.Context, d time.Duration) error {
 			sleptMu.Lock()
 			slept = append(slept, d)
 			sleptMu.Unlock()
@@ -288,7 +288,7 @@ func TestSupervisorStartFailureBacksOff(t *testing.T) {
 	s := New(Config{
 		Radio:  Radio{ID: "radio0"},
 		Binary: "rtl_433",
-		Start: func(ctx context.Context, name string, args []string) (Process, error) {
+		Start: func(_ context.Context, _ string, _ []string) (Process, error) {
 			return nil, errors.New("exec: not found")
 		},
 		Events: log.add,

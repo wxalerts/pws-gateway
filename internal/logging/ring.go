@@ -33,7 +33,7 @@ func (r *Ring) Write(p []byte) (int, error) {
 	defer r.mu.Unlock()
 	buf := p
 	if len(r.partial) > 0 {
-		buf = append(r.partial, p...)
+		buf = append(append([]byte(nil), r.partial...), p...)
 		r.partial = nil
 	}
 	for {

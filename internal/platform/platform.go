@@ -159,7 +159,7 @@ type Platform interface {
 	Reboot(ctx context.Context) error
 }
 
-// Probe inspects the host and returns an adapter when it recognises the
+// Probe inspects the host and returns an adapter when it recognizes the
 // board. Returning (nil, false) means "not mine".
 type Probe func() (Platform, bool)
 

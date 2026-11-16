@@ -22,7 +22,7 @@ var (
 // but not by others. It contains no secrets, only topology.
 const filePerm = 0o640
 
-// Store is the in-memory copy of config.json plus the lock that serialises
+// Store is the in-memory copy of config.json plus the lock that serializes
 // writers. Readers get a deep copy so they can never mutate shared state.
 type Store struct {
 	mu   sync.RWMutex
@@ -291,7 +291,10 @@ func migrate(raw map[string]json.RawMessage) error {
 		}
 		v++
 	}
-	sv, _ := json.Marshal(v)
+	sv, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("config: encode schema_version: %w", err)
+	}
 	raw["schema_version"] = sv
 	return nil
 }

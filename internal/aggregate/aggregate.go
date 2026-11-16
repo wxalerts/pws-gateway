@@ -216,7 +216,7 @@ func addDirection(fs *fieldState, deg float64) {
 }
 
 // VectorMean converts summed unit vector components to a heading in
-// [0, 360). An all-cancelling sum (no preferred direction) yields 0.
+// [0, 360). An all-canceling sum (no preferred direction) yields 0.
 func VectorMean(sx, sy float64) float64 {
 	if math.Abs(sx) < 1e-12 && math.Abs(sy) < 1e-12 {
 		return 0

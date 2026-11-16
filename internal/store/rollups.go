@@ -19,7 +19,7 @@ func (s *Store) WriteRollups(ctx context.Context, buckets []model.Bucket) error 
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer rollback(tx)
 	stmt, err := tx.PrepareContext(ctx, `INSERT INTO rollups
 		(station_key, bucket_start, field, kind, n, avg, min, max, sum, vec, last)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

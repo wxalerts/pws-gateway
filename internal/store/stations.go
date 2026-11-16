@@ -30,7 +30,7 @@ func (s *Store) UpsertStations(ctx context.Context, stations []model.Station) er
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer rollback(tx)
 	stmt, err := tx.PrepareContext(ctx, `INSERT INTO stations
 		(key, model, id, channel, first_seen, last_seen, sightings, meta)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -43,7 +43,8 @@ func (s *Store) UpsertStations(ctx context.Context, stations []model.Station) er
 		return err
 	}
 	defer func() { _ = stmt.Close() }()
-	for _, st := range stations {
+	for i := range stations {
+		st := &stations[i]
 		meta, err := json.Marshal(stationMeta{
 			Fields: st.Fields, RawFields: st.RawFields, LastSignal: st.LastSignal,
 			BatteryOK: st.BatteryOK, Radio: st.Radio, Lost: st.Lost,
@@ -98,7 +99,7 @@ func (s *Store) DeleteStation(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer rollback(tx)
 	if _, err := tx.ExecContext(ctx, "DELETE FROM rollups WHERE station_key = ?", key); err != nil {
 		return err
 	}

@@ -31,7 +31,7 @@ func Canonicalize(data []byte) ([]byte, error) {
 	dec.UseNumber()
 	var v any
 	if err := dec.Decode(&v); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidJSON, err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidJSON, err)
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("%w: trailing data after JSON value", ErrInvalidJSON)

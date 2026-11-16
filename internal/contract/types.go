@@ -3,7 +3,7 @@
 // canonical JSON, and Ed25519 signing and verification of commands.
 //
 // The JSON tags on these types match the schemas exactly. Timestamps are
-// time.Time values that must be in UTC when a message is marshalled; the
+// time.Time values that must be in UTC when a message is marshaled; the
 // schema rejects numeric offsets, so Marshal fails loudly on a local time.
 // Optional numeric fields are pointers so that a legitimate zero is sent and
 // an absent value is omitted.
@@ -107,7 +107,7 @@ type Signal struct {
 	SNRdB  *float64 `json:"snr_db,omitempty"`
 }
 
-// Gauge is a sampled quantity summarised by avg, min and max. At least one
+// Gauge is a sampled quantity summarized by avg, min and max. At least one
 // statistic must be set.
 type Gauge struct {
 	Avg *float64 `json:"avg,omitempty"`
@@ -315,7 +315,7 @@ type Command struct {
 
 	// signingInput caches the canonical signing input derived from the exact
 	// bytes a command was parsed from, so verification does not depend on
-	// this package re-serialising the fields identically. Set by
+	// this package re-serializing the fields identically. Set by
 	// ParseCommand.
 	signingInput []byte
 }

@@ -1,5 +1,5 @@
 // Package generic is the fallback platform adapter for any Linux host that is
-// not a recognised Raspberry Pi: a developer laptop, a CI runner, a different
+// not a recognized Raspberry Pi: a developer laptop, a CI runner, a different
 // single board computer. It reports Tier "unsupported" and only the facts it
 // can actually read; there is no firmware throttle register and USB listing
 // works wherever sysfs exists.

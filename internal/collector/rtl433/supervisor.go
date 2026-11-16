@@ -58,7 +58,7 @@ type Backoff struct {
 	Min    time.Duration // first delay, default 1s
 	Max    time.Duration // cap, default 5m
 	Factor float64       // growth per attempt, default 2
-	Jitter float64       // fraction of the delay randomised either way, default 0.2
+	Jitter float64       // fraction of the delay randomized either way, default 0.2
 	// ResetAfter is how long a process must run before the attempt counter
 	// resets. A process that dies in under this time is still failing.
 	ResetAfter time.Duration // default 60s
@@ -213,7 +213,7 @@ func (s *Supervisor) Status() Status {
 	return st
 }
 
-// Run supervises the process until ctx is cancelled. It always returns
+// Run supervises the process until ctx is canceled. It always returns
 // ctx.Err() and closes Lines on the way out.
 func (s *Supervisor) Run(ctx context.Context) error {
 	defer close(s.lines)
@@ -277,7 +277,9 @@ func (s *Supervisor) runOnce(ctx context.Context) (time.Duration, error) {
 	go func() {
 		select {
 		case <-ctx.Done():
-			_ = proc.Kill()
+			if err := proc.Kill(); err != nil {
+				s.cfg.Logger.Debug("rtl_433 kill on context end", "radio", s.cfg.Radio.ID, "err", err)
+			}
 		case <-killDone:
 		}
 	}()

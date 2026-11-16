@@ -33,7 +33,7 @@ func collect(t *testing.T, r *Replay, src string) []Line {
 
 func TestReplayMaxSpeed(t *testing.T) {
 	slept := 0
-	r := &Replay{Radio: "replay", Sleep: func(ctx context.Context, d time.Duration) error {
+	r := &Replay{Radio: "replay", Sleep: func(_ context.Context, _ time.Duration) error {
 		slept++
 		return nil
 	}}
@@ -58,7 +58,7 @@ func TestReplayMaxSpeed(t *testing.T) {
 
 func TestReplayPaced(t *testing.T) {
 	var slept []time.Duration
-	r := &Replay{Speed: 10, Sleep: func(ctx context.Context, d time.Duration) error {
+	r := &Replay{Speed: 10, Sleep: func(_ context.Context, d time.Duration) error {
 		slept = append(slept, d)
 		return nil
 	}}

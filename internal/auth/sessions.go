@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -132,13 +133,13 @@ func (s *Sessions) Get(id string) (Session, bool) {
 	}
 	if s.expired(sess) {
 		delete(s.byHash, hashID(id))
-		_ = s.saveLocked()
+		s.saveOrLog()
 		return Session{}, false
 	}
 	now := s.opts.Now()
 	if now.Sub(sess.LastSeen) >= sessionTouchInterval {
 		sess.LastSeen = now
-		_ = s.saveLocked()
+		s.saveOrLog()
 	}
 	return *sess, true
 }
@@ -168,7 +169,7 @@ func (s *Sessions) Prune() int {
 	defer s.mu.Unlock()
 	n := s.pruneLocked()
 	if n > 0 {
-		_ = s.saveLocked()
+		s.saveOrLog()
 	}
 	return n
 }
@@ -194,6 +195,15 @@ func (s *Sessions) pruneLocked() int {
 		}
 	}
 	return n
+}
+
+// saveOrLog persists the table on paths that cannot return an error to the
+// caller (Get, Prune). A failed save only loses idle-timer updates or an
+// expiry on disk; the in-memory table stays authoritative, so log and go on.
+func (s *Sessions) saveOrLog() {
+	if err := s.saveLocked(); err != nil {
+		slog.Warn("auth: could not persist sessions", "err", err)
+	}
 }
 
 func (s *Sessions) saveLocked() error {

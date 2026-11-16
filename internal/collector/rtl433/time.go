@@ -10,7 +10,7 @@ import (
 
 // ErrBadTime is returned when a time string matches none of the rtl_433
 // formats.
-var ErrBadTime = errors.New("rtl433: unrecognised time format")
+var ErrBadTime = errors.New("rtl433: unrecognized time format")
 
 // Time formats rtl_433 can produce, from src/r_api.c time_pos_str and
 // src/r_util.c format_time_str / usecs_time_str (checked 2026-11-16):

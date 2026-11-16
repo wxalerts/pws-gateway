@@ -55,7 +55,7 @@ func (s *Store) Enqueue(ctx context.Context, topic string, payload []byte, now t
 	if err != nil {
 		return 0, err
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer rollback(tx)
 
 	var cur string
 	err = tx.QueryRowContext(ctx, "SELECT value FROM kv WHERE key = ?", seqKey).Scan(&cur)
@@ -122,7 +122,7 @@ func (s *Store) Ack(ctx context.Context, seqs ...int64) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer rollback(tx)
 	for _, seq := range seqs {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM outbox WHERE seq = ?", seq); err != nil {
 			return err
@@ -156,7 +156,7 @@ type OutboxStatus struct {
 	Events  int64     `json:"events"`
 }
 
-// OutboxStatus summarises the queue.
+// OutboxStatus summarizes the queue.
 func (s *Store) OutboxStatus(ctx context.Context) (OutboxStatus, error) {
 	var st OutboxStatus
 	var oldest, newest sql.NullString
@@ -182,7 +182,11 @@ func (s *Store) OutboxStatus(ctx context.Context) (OutboxStatus, error) {
 	}
 	st.NextSeq = 1
 	if ok {
-		st.NextSeq, _ = strconv.ParseInt(v, 10, 64)
+		n, perr := strconv.ParseInt(v, 10, 64)
+		if perr != nil {
+			return st, fmt.Errorf("store: outbox %s is not an integer: %w", seqKey, perr)
+		}
+		st.NextSeq = n
 	}
 	return st, nil
 }
@@ -242,7 +246,9 @@ func (s *Store) Prune(ctx context.Context, now time.Time, p PrunePolicy) (PruneR
 	if err != nil {
 		return res, err
 	}
-	res.DroppedByAge, _ = r.RowsAffected()
+	if res.DroppedByAge, err = r.RowsAffected(); err != nil {
+		return res, err
+	}
 
 	protectCutoff := FormatTime(now.Add(-p.Protect))
 	bytes, err := s.outboxBytes(ctx)
@@ -257,7 +263,10 @@ func (s *Store) Prune(ctx context.Context, now time.Time, p PrunePolicy) (PruneR
 			if err != nil {
 				return res, err
 			}
-			n, _ := r.RowsAffected()
+			n, err := r.RowsAffected()
+			if err != nil {
+				return res, err
+			}
 			if n == 0 {
 				break
 			}

@@ -350,10 +350,10 @@ func TestWriterBatchesAndRetries(t *testing.T) {
 
 	// A failed flush keeps the batch.
 	w.Add(bucket(t0.Add(10*time.Minute), "X:1:", 3))
-	cancelled, cancel := context.WithCancel(ctx)
+	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	if err := w.Flush(cancelled); err == nil {
-		t.Fatal("expected error from cancelled context")
+	if err := w.Flush(canceled); err == nil {
+		t.Fatal("expected error from canceled context")
 	}
 	if w.Pending() != 1 {
 		t.Fatalf("batch lost on failure: pending = %d", w.Pending())

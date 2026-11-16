@@ -271,11 +271,12 @@ func (t *Tracker) CandidateCount() int {
 func (t *Tracker) Restore(stations []model.Station) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	for _, st := range stations {
+	for i := range stations {
+		st := &stations[i]
 		if st.Key == "" {
 			continue
 		}
-		e := &entry{st: st, lastFields: map[string]float64{}, fields: map[string]bool{}, rawFields: map[string]bool{}}
+		e := &entry{st: *st, lastFields: map[string]float64{}, fields: map[string]bool{}, rawFields: map[string]bool{}}
 		for _, f := range st.Fields {
 			e.fields[f] = true
 		}

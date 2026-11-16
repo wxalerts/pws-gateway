@@ -167,7 +167,11 @@ var throttledPaths = []string{
 // ok is false when the host has no Raspberry Pi firmware node.
 func (h Host) ThrottledRaw() (string, bool) {
 	for _, p := range throttledPaths {
-		matches, _ := filepath.Glob(h.path(p))
+		// Glob only fails on a malformed pattern; the patterns are constants.
+		matches, err := filepath.Glob(h.path(p))
+		if err != nil {
+			continue
+		}
 		sort.Strings(matches)
 		for _, m := range matches {
 			b, err := os.ReadFile(m)
@@ -221,8 +225,13 @@ func (h Host) USBDevices() ([]USBDevice, error) {
 			ProductName:  readOptional(filepath.Join(base, "product")),
 			Serial:       readOptional(filepath.Join(base, "serial")),
 		}
-		d.Bus, _ = readInt(filepath.Join(base, "busnum"))
-		d.Dev, _ = readInt(filepath.Join(base, "devnum"))
+		// Bus and device numbers are optional; zero means not reported.
+		if n, err := readInt(filepath.Join(base, "busnum")); err == nil {
+			d.Bus = n
+		}
+		if n, err := readInt(filepath.Join(base, "devnum")); err == nil {
+			d.Dev = n
+		}
 		out = append(out, d)
 	}
 	sort.Slice(out, func(i, j int) bool {

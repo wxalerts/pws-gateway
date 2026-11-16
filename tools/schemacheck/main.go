@@ -7,11 +7,13 @@
 package main
 
 import (
+	"crypto/ed25519"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/wxalerts/pws-gateway/internal/contract"
 	"github.com/wxalerts/pws-gateway/internal/contract/conformance"
@@ -53,32 +55,15 @@ func main() {
 	valid := map[contract.Kind]int{}
 	invalid := map[contract.Kind]int{}
 	for _, ex := range examples {
-		rel, _ := filepath.Rel(*root, ex.Path)
+		rel, relErr := filepath.Rel(*root, ex.Path)
+		if relErr != nil {
+			rel = ex.Path
+		}
 		if ex.Valid {
 			valid[ex.Kind]++
-			if err := contract.Validate(ex.Kind, ex.Data); err != nil {
-				fail("%s: %v", rel, err)
+			if msg := checkValid(ex, rel, pub, vectors.VerifyAt); msg != "" {
+				fail("%s", msg)
 				continue
-			}
-			out, err := conformance.RoundTrip(ex)
-			if err != nil {
-				fail("%s: round trip through Go type: %v", rel, err)
-				continue
-			}
-			diffs, err := conformance.Diff(ex.Data, out)
-			if err != nil {
-				fail("%s: %v", rel, err)
-				continue
-			}
-			if len(diffs) > 0 {
-				fail("%s: round trip changed the document:\n  %s", rel, strings.Join(diffs, "\n  "))
-				continue
-			}
-			if ex.Kind == contract.KindCmd {
-				if err := conformance.VerifyCommandExample(ex, pub, vectors.VerifyAt); err != nil {
-					fail("%s: signature does not verify with the test key: %v", rel, err)
-					continue
-				}
 			}
 			ok("%s", rel)
 			continue
@@ -126,4 +111,29 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Printf("all %d examples conform\n", len(examples))
+}
+
+// checkValid runs every check a valid example must pass and returns a failure
+// message, or "" when the example conforms.
+func checkValid(ex conformance.Example, rel string, pub ed25519.PublicKey, verifyAt time.Time) string {
+	if err := contract.Validate(ex.Kind, ex.Data); err != nil {
+		return fmt.Sprintf("%s: %v", rel, err)
+	}
+	out, err := conformance.RoundTrip(ex)
+	if err != nil {
+		return fmt.Sprintf("%s: round trip through Go type: %v", rel, err)
+	}
+	diffs, err := conformance.Diff(ex.Data, out)
+	if err != nil {
+		return fmt.Sprintf("%s: %v", rel, err)
+	}
+	if len(diffs) > 0 {
+		return fmt.Sprintf("%s: round trip changed the document:\n  %s", rel, strings.Join(diffs, "\n  "))
+	}
+	if ex.Kind == contract.KindCmd {
+		if err := conformance.VerifyCommandExample(ex, pub, verifyAt); err != nil {
+			return fmt.Sprintf("%s: signature does not verify with the test key: %v", rel, err)
+		}
+	}
+	return ""
 }

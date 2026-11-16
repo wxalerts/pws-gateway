@@ -1,6 +1,6 @@
 // Package store persists stations, rollups and the uplink outbox in SQLite.
 //
-// The database lives on an SD card, so the design minimises writes: raw
+// The database lives on an SD card, so the design minimizes writes: raw
 // samples never touch disk, rollups arrive in one transaction per flush, and
 // the journal runs in WAL mode with synchronous=NORMAL, which batches fsyncs
 // to checkpoints while still surviving a process crash. A power cut can lose
@@ -17,6 +17,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"sort"
 	"strconv"
@@ -33,6 +34,15 @@ var migrationFS embed.FS
 // TimeLayout is how every timestamp is stored: fixed width UTC so that
 // string comparison is chronological.
 const TimeLayout = "2006-01-02T15:04:05.000000Z"
+
+// rollback undoes tx on error paths and deferred cleanup. After a successful
+// Commit it returns sql.ErrTxDone, which is expected and ignored; any other
+// failure is logged because the caller is already returning its own error.
+func rollback(tx *sql.Tx) {
+	if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+		slog.Warn("store: rollback failed", "err", err)
+	}
+}
 
 // FormatTime renders t for storage.
 func FormatTime(t time.Time) string { return t.UTC().Format(TimeLayout) }
@@ -54,7 +64,7 @@ type Store struct {
 	db   *sql.DB
 	path string
 
-	// mu serialises multi-statement operations that must not interleave
+	// mu serializes multi-statement operations that must not interleave
 	// with each other at the Go level, such as prune loops.
 	mu sync.Mutex
 }
@@ -98,7 +108,10 @@ func Open(path string) (*Store, error) {
 func (s *Store) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_, _ = s.db.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)")
+	// Best effort: a failed checkpoint only leaves the WAL for the next open.
+	if _, err := s.db.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)"); err != nil {
+		slog.Warn("store: wal checkpoint on close failed", "err", err)
+	}
 	return s.db.Close()
 }
 
@@ -185,12 +198,12 @@ func (s *Store) migrate(ctx context.Context) error {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, string(body)); err != nil {
-			_ = tx.Rollback()
+			rollback(tx)
 			return fmt.Errorf("store: migration %s: %w", m.name, err)
 		}
 		if _, err := tx.ExecContext(ctx, "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
 			m.version, m.name, FormatTime(time.Now())); err != nil {
-			_ = tx.Rollback()
+			rollback(tx)
 			return err
 		}
 		if err := tx.Commit(); err != nil {

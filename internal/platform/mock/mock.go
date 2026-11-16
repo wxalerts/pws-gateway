@@ -11,7 +11,7 @@ import (
 )
 
 // Platform is the mock. Fields may be changed between calls; access is
-// serialised by an internal mutex so tests can mutate it from any goroutine.
+// serialized by an internal mutex so tests can mutate it from any goroutine.
 type Platform struct {
 	mu sync.Mutex
 

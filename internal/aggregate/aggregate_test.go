@@ -85,7 +85,7 @@ func TestDirectionVectorMean(t *testing.T) {
 		t.Fatalf("mean of 90 and 180 = %v", a.Avg)
 	}
 	if VectorMean(0, 0) != 0 {
-		t.Fatal("cancelled vectors should give 0")
+		t.Fatal("canceled vectors should give 0")
 	}
 	if v := VectorMean(1, -1e-9); v < 0 || v >= 360 {
 		t.Fatalf("near north negative = %v", v)

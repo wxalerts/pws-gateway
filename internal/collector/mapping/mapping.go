@@ -135,7 +135,7 @@ const BatteryOKThreshold = 0.5
 type Quirk struct {
 	Prefix string
 	Rules  []Rule
-	// Note documents the family's behaviour for maintainers even when no
+	// Note documents the family's behavior for maintainers even when no
 	// rule is needed.
 	Note string
 }

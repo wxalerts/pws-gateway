@@ -111,70 +111,83 @@ func Diff(want, got []byte) ([]string, error) {
 func diffValue(path string, want, got any) []string {
 	switch w := want.(type) {
 	case map[string]any:
-		g, ok := got.(map[string]any)
-		if !ok {
-			return []string{fmt.Sprintf("%s: want object, got %T", path, got)}
-		}
-		var out []string
-		keys := make([]string, 0, len(w))
-		for k := range w {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			child := path + "." + k
-			gv, present := g[k]
-			if !present {
-				if strings.HasPrefix(k, "x_") || isEmpty(w[k]) {
-					continue
-				}
-				out = append(out, fmt.Sprintf("%s: dropped by the Go type", child))
+		return diffObject(path, w, got)
+	case []any:
+		return diffArray(path, w, got)
+	case string:
+		return diffString(path, w, got)
+	default:
+		return diffScalar(path, want, got)
+	}
+}
+
+func diffObject(path string, w map[string]any, got any) []string {
+	g, ok := got.(map[string]any)
+	if !ok {
+		return []string{fmt.Sprintf("%s: want object, got %T", path, got)}
+	}
+	var out []string
+	keys := make([]string, 0, len(w))
+	for k := range w {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		child := path + "." + k
+		gv, present := g[k]
+		if !present {
+			if strings.HasPrefix(k, "x_") || isEmpty(w[k]) {
 				continue
 			}
-			out = append(out, diffValue(child, w[k], gv)...)
+			out = append(out, fmt.Sprintf("%s: dropped by the Go type", child))
+			continue
 		}
-		for k := range g {
-			if _, present := w[k]; !present {
-				out = append(out, fmt.Sprintf("%s.%s: added by the Go type", path, k))
-			}
-		}
-		return out
-	case []any:
-		g, ok := got.([]any)
-		if !ok {
-			return []string{fmt.Sprintf("%s: want array, got %T", path, got)}
-		}
-		if len(g) != len(w) {
-			return []string{fmt.Sprintf("%s: want %d items, got %d", path, len(w), len(g))}
-		}
-		var out []string
-		for i := range w {
-			out = append(out, diffValue(fmt.Sprintf("%s[%d]", path, i), w[i], g[i])...)
-		}
-		return out
-	case string:
-		// Timestamps may be re-spelled by time.Time (for example .250Z
-		// becomes .25Z). Compare them as instants.
-		if g, ok := got.(string); ok {
-			wt, werr := time.Parse(time.RFC3339Nano, w)
-			gt, gerr := time.Parse(time.RFC3339Nano, g)
-			if werr == nil && gerr == nil {
-				if !wt.Equal(gt) {
-					return []string{fmt.Sprintf("%s: want %s, got %s", path, w, g)}
-				}
-				return nil
-			}
-		}
-		if !reflect.DeepEqual(want, got) {
-			return []string{fmt.Sprintf("%s: want %v, got %v", path, want, got)}
-		}
-		return nil
-	default:
-		if !reflect.DeepEqual(want, got) {
-			return []string{fmt.Sprintf("%s: want %v, got %v", path, want, got)}
-		}
-		return nil
+		out = append(out, diffValue(child, w[k], gv)...)
 	}
+	for k := range g {
+		if _, present := w[k]; !present {
+			out = append(out, fmt.Sprintf("%s.%s: added by the Go type", path, k))
+		}
+	}
+	return out
+}
+
+func diffArray(path string, w []any, got any) []string {
+	g, ok := got.([]any)
+	if !ok {
+		return []string{fmt.Sprintf("%s: want array, got %T", path, got)}
+	}
+	if len(g) != len(w) {
+		return []string{fmt.Sprintf("%s: want %d items, got %d", path, len(w), len(g))}
+	}
+	var out []string
+	for i := range w {
+		out = append(out, diffValue(fmt.Sprintf("%s[%d]", path, i), w[i], g[i])...)
+	}
+	return out
+}
+
+func diffString(path, w string, got any) []string {
+	// Timestamps may be re-spelled by time.Time (for example .250Z
+	// becomes .25Z). Compare them as instants.
+	if g, ok := got.(string); ok {
+		wt, werr := time.Parse(time.RFC3339Nano, w)
+		gt, gerr := time.Parse(time.RFC3339Nano, g)
+		if werr == nil && gerr == nil {
+			if !wt.Equal(gt) {
+				return []string{fmt.Sprintf("%s: want %s, got %s", path, w, g)}
+			}
+			return nil
+		}
+	}
+	return diffScalar(path, w, got)
+}
+
+func diffScalar(path string, want, got any) []string {
+	if !reflect.DeepEqual(want, got) {
+		return []string{fmt.Sprintf("%s: want %v, got %v", path, want, got)}
+	}
+	return nil
 }
 
 func isEmpty(v any) bool {
@@ -245,7 +258,8 @@ func (f *SigningVectors) Keys() (ed25519.PublicKey, ed25519.PrivateKey, error) {
 		return nil, nil, fmt.Errorf("seed_hex: want %d bytes, got %d", ed25519.SeedSize, len(seed))
 	}
 	priv := ed25519.NewKeyFromSeed(seed)
-	return priv.Public().(ed25519.PublicKey), priv, nil
+	// The public half is the tail of the expanded private key.
+	return ed25519.PublicKey(priv[ed25519.SeedSize:]), priv, nil
 }
 
 // Check recomputes every vector from the seed and the unsigned command and
@@ -329,7 +343,7 @@ func GenerateSigningVectors(seed []byte, verifyAt time.Time, inputs []SigningInp
 			"On the wire the signature is carried in 'sig' as standard base64 with padding (RFC 4648 section 4). " +
 			"verify_at is the clock value at which each command is still unexpired.",
 		SeedHex:      hex.EncodeToString(seed),
-		PublicKeyHex: hex.EncodeToString(priv.Public().(ed25519.PublicKey)),
+		PublicKeyHex: hex.EncodeToString(priv[ed25519.SeedSize:]),
 		VerifyAt:     verifyAt,
 	}
 	for _, in := range inputs {
@@ -428,5 +442,5 @@ func WriteJSON(path string, v any) error {
 	if err := enc.Encode(v); err != nil {
 		return err
 	}
-	return os.WriteFile(path, buf.Bytes(), 0o644)
+	return os.WriteFile(path, buf.Bytes(), 0o640)
 }

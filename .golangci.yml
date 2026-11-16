@@ -66,9 +66,13 @@ linters:
     govet:
       enable-all: true
       disable:
-        # fieldalignment is a micro optimisation that hurts readability of
+        # fieldalignment is a micro optimization that hurts readability of
         # the contract types.
         - fieldalignment
+        # shadow fires on the idiomatic "if err := f(); err != nil" inside a
+        # function that already has an err, which is how most Go is written
+        # and is rarely a bug. The other analyzers stay on.
+        - shadow
     misspell:
       locale: US
     revive:
@@ -104,6 +108,9 @@ linters:
       check-exported: false
   exclusions:
     generated: lax
+    paths:
+      # Vendored JS dependencies ship Go files that are not ours.
+      - web/node_modules
     presets:
       - comments
       - std-error-handling
@@ -120,6 +127,11 @@ linters:
       - path: ^tools/
         linters:
           - gosec
+      # Table style tests branch once per assertion, so their cyclomatic
+      # complexity says little. Production code keeps the limit of 20.
+      - path: _test\.go
+        linters:
+          - gocyclo
 
 formatters:
   enable:

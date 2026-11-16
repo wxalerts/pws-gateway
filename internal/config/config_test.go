@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -60,7 +61,7 @@ func TestStoreRoundTrip(t *testing.T) {
 	got := s2.Get()
 	a, _ := json.Marshal(want)
 	b, _ := json.Marshal(got)
-	if string(a) != string(b) {
+	if !bytes.Equal(a, b) {
 		t.Fatalf("round trip mismatch:\n%s\n%s", a, b)
 	}
 	if got.Network.Pending == nil || got.Network.Pending.DNS[0] != "1.1.1.1" || !got.Network.ConfirmDeadline.Equal(deadline) {
@@ -101,7 +102,7 @@ func TestUpdateRejectsInvalidAndKeepsOld(t *testing.T) {
 		t.Fatalf("problems = %v", ve.Problems)
 	}
 	after, _ := os.ReadFile(s.Path())
-	if string(before) != string(after) {
+	if !bytes.Equal(before, after) {
 		t.Fatal("invalid update must not touch the file")
 	}
 	if s.Get().History.CadenceMinutes != 15 {

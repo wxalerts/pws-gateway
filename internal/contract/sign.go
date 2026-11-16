@@ -35,7 +35,7 @@ type signedFields struct {
 //
 // For a command obtained from ParseCommand the input is derived from the
 // bytes that were received, so the signature survives any difference in how
-// this package would re-serialise a timestamp. For a command built in Go the
+// this package would re-serialize a timestamp. For a command built in Go the
 // input is derived from the fields, which is also exactly what Marshal puts
 // on the wire.
 func SigningInput(c *Command) ([]byte, error) {
@@ -64,7 +64,7 @@ func SigningInput(c *Command) ([]byte, error) {
 func signingInputFromJSON(data []byte) ([]byte, error) {
 	var all map[string]json.RawMessage
 	if err := json.Unmarshal(data, &all); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidJSON, err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidJSON, err)
 	}
 	picked := make(map[string]json.RawMessage, 5)
 	for _, k := range []string{"id", "type", "device_id", "exp", "body"} {

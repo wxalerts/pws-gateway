@@ -1,6 +1,7 @@
 package contract_test
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
@@ -90,7 +91,7 @@ func TestSigningVectors(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if v.Name != vectorInputs[i].Name || string(want) != string(got) {
+		if v.Name != vectorInputs[i].Name || !bytes.Equal(want, got) {
 			t.Errorf("vector %d (%s) differs from the input in this test; run with -update", i, v.Name)
 		}
 	}
