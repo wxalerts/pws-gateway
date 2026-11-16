@@ -144,3 +144,19 @@ func (a *Adapter) TimeSync(ctx context.Context) (platform.TimeSync, error) {
 func (a *Adapter) Reboot(context.Context) error {
 	return platform.ErrUnsupported
 }
+
+// DefaultRouteInterface reports the interface of the IPv4 default route, read
+// from /proc/net/route.
+func (a *Adapter) DefaultRouteInterface(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	name, err := a.FS.DefaultRouteInterface()
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", platform.ErrUnsupported
+		}
+		return "", err
+	}
+	return name, nil
+}

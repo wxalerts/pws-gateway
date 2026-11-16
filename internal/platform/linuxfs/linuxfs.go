@@ -279,3 +279,42 @@ func readHex16(p string) (uint16, error) {
 	}
 	return uint16(v), nil
 }
+
+// ErrNoDefaultRoute is returned by DefaultRouteInterface when the routing
+// table has no default route (the host is offline).
+var ErrNoDefaultRoute = errors.New("linuxfs: no default route")
+
+// DefaultRouteInterface parses /proc/net/route and returns the interface of
+// the default route (destination 00000000, mask 00000000, flags with RTF_UP).
+// With several default routes the one with the lowest metric wins.
+func (h Host) DefaultRouteInterface() (string, error) {
+	b, err := os.ReadFile(h.path("proc/net/route"))
+	if err != nil {
+		return "", err
+	}
+	best, bestMetric := "", -1
+	for i, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		if i == 0 || len(f) < 8 {
+			continue
+		}
+		if f[1] != "00000000" || f[7] != "00000000" {
+			continue
+		}
+		flags, err := strconv.ParseUint(f[3], 16, 32)
+		if err != nil || flags&0x1 == 0 {
+			continue
+		}
+		metric, err := strconv.Atoi(f[6])
+		if err != nil {
+			continue
+		}
+		if bestMetric < 0 || metric < bestMetric {
+			best, bestMetric = f[0], metric
+		}
+	}
+	if best == "" {
+		return "", ErrNoDefaultRoute
+	}
+	return best, nil
+}

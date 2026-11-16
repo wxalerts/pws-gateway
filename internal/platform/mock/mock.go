@@ -25,6 +25,9 @@ type Platform struct {
 	TimeSyncValue platform.TimeSync
 	TimeSyncErr   error
 	RebootErr     error
+	// RouteIface and RouteErr are the default route interface answer.
+	RouteIface string
+	RouteErr   error
 	// RebootCalls counts Reboot invocations.
 	RebootCalls int
 }
@@ -53,6 +56,7 @@ func New() *Platform {
 		TimeSyncValue: platform.TimeSync{Synced: true, Source: "systemd-timesyncd", OffsetKnown: true},
 		ResetErr:      platform.ErrUnsupported,
 		RebootErr:     platform.ErrUnsupported,
+		RouteIface:    "eth0",
 	}
 }
 
@@ -89,6 +93,13 @@ func (m *Platform) TimeSync(context.Context) (platform.TimeSync, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.TimeSyncValue, m.TimeSyncErr
+}
+
+// DefaultRouteInterface implements platform.Platform.
+func (m *Platform) DefaultRouteInterface(context.Context) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.RouteIface, m.RouteErr
 }
 
 // Reboot implements platform.Platform.

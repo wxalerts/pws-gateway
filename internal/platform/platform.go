@@ -154,6 +154,12 @@ type Platform interface {
 	USBResetCount(ctx context.Context) (int, error)
 	// TimeSync reports the NTP state.
 	TimeSync(ctx context.Context) (TimeSync, error)
+	// DefaultRouteInterface returns the name of the network interface that
+	// carries the default IPv4 route (for example "eth0", "wlan0" or "wwan0"),
+	// or ErrUnsupported when it cannot be told. Only the name is returned, no
+	// address, so telemetry can classify the link without leaking network
+	// details.
+	DefaultRouteInterface(ctx context.Context) (string, error)
 	// Reboot restarts the host. It returns ErrUnsupported until the signed
 	// remote command path exists; nothing may call it on its own.
 	Reboot(ctx context.Context) error
