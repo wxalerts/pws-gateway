@@ -28,6 +28,9 @@ type Store struct {
 	mu   sync.RWMutex
 	path string
 	cfg  Config
+
+	subMu sync.Mutex
+	subs  []func(Config)
 }
 
 // NewStore points a store at <dataDir>/config.json. Call Load before use.
@@ -64,11 +67,35 @@ func (s *Store) Get() Config {
 	return s.cfg.Clone()
 }
 
+// Subscribe registers fn to run after every successful Save or Update, with a
+// copy of the configuration that was written. Callbacks run on the writer's
+// goroutine after the store lock is released, so they may call Get, but they
+// should return quickly (hand off to another goroutine for real work).
+func (s *Store) Subscribe(fn func(Config)) {
+	s.subMu.Lock()
+	s.subs = append(s.subs, fn)
+	s.subMu.Unlock()
+}
+
+func (s *Store) notify(cfg Config) {
+	s.subMu.Lock()
+	subs := append([](func(Config)){}, s.subs...)
+	s.subMu.Unlock()
+	for _, fn := range subs {
+		fn(cfg.Clone())
+	}
+}
+
 // Save validates and writes the current in-memory configuration.
 func (s *Store) Save() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return Save(s.path, s.cfg)
+	err := Save(s.path, s.cfg)
+	cfg := s.cfg.Clone()
+	s.mu.Unlock()
+	if err == nil {
+		s.notify(cfg)
+	}
+	return err
 }
 
 // Update applies fn to a copy, validates the result, writes it, and only then
@@ -76,15 +103,18 @@ func (s *Store) Save() error {
 // untouched.
 func (s *Store) Update(fn func(*Config) error) (Config, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	next := s.cfg.Clone()
 	if err := fn(&next); err != nil {
+		s.mu.Unlock()
 		return Config{}, err
 	}
 	if err := Save(s.path, next); err != nil {
+		s.mu.Unlock()
 		return Config{}, err
 	}
 	s.cfg = next
+	s.mu.Unlock()
+	s.notify(next)
 	return next.Clone(), nil
 }
 
