@@ -18,8 +18,10 @@ import (
 	"time"
 
 	"github.com/wxalerts/pws-gateway/internal/collector"
+	"github.com/wxalerts/pws-gateway/internal/collector/mapping"
 	"github.com/wxalerts/pws-gateway/internal/collector/rtl433"
 	"github.com/wxalerts/pws-gateway/internal/config"
+	"github.com/wxalerts/pws-gateway/internal/model"
 	"github.com/wxalerts/pws-gateway/internal/platform"
 	"github.com/wxalerts/pws-gateway/internal/store"
 	"github.com/wxalerts/pws-gateway/internal/uplink"
@@ -124,10 +126,22 @@ func New(deps Deps) (*App, error) {
 		TimeSynced: a.timeSynced(),
 		Now:        deps.Now,
 		Events:     a.onPipelineEvent,
+		Selection:  a.selection,
 		Logger:     a.log,
 	})
 	a.setupUplink()
 	return a, nil
+}
+
+// selection tells the pipeline which stations and fields to store. It reads
+// the live config on every call, so ticking a station in the UI takes effect
+// on the next reading without a restart.
+func (a *App) selection(st model.Station) (bool, []string) {
+	ann, ok := a.deps.Config.Get().Stations[st.Key]
+	if !ok || !ann.Selected {
+		return false, nil
+	}
+	return true, ann.EffectiveFields(mapping.DefaultFields(st.Model, st.Fields))
 }
 
 // Stations, Readings and Status are the adapters for web.Options.

@@ -7,6 +7,22 @@
 // the web layer adapts the query methods (Stations, Readings, OutboxStatus,
 // Status) to its own interfaces.
 //
+// # What is kept for unselected stations
+//
+// Every discovered station gets discovery tracking (key, model, fields and raw
+// field names seen, signal, last seen), and its recent readings are held in
+// memory (Config.RecentPerStation) so the owner can preview a station before
+// selecting it. That is all: nothing for an unselected station is written to
+// the store as a rollup, and it is never uplinked or relayed. The recent
+// readings live in RAM only and are lost at restart. The station list itself
+// is persisted so that a known station is still listed after a restart.
+//
+// Selection is applied through Config.Selection. For a selected station only
+// the effective fields (config.Station.EffectiveFields) are aggregated into
+// buckets and stored. Deselecting a station stops new rollups from being
+// written; rollups already stored are not deleted. A bucket that was already
+// open when the station was deselected is still written when it closes.
+//
 // # Repeat suppression
 //
 // Most transmitters send each message several times in a row: the real

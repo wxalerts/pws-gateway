@@ -85,6 +85,15 @@ type Config struct {
 	// made without ":tz" is still UTC.
 	Location *time.Location
 
+	// Selection decides, per discovered station, whether rollups are stored
+	// and which canonical fields go into them. It is called for every
+	// accepted reading with the tracker's current view of the station (so
+	// Fields lists what the station has reported so far) and must be cheap
+	// and safe for concurrent use. A nil Selection stores every field of
+	// every station, which is what tests that do not care about selection
+	// want; the app always sets it.
+	Selection func(st model.Station) (selected bool, fields []string)
+
 	// Mapper overrides the default mapping tables.
 	Mapper *mapping.Mapper
 	// Discovery tunes the tracker. Its Events field is ignored; use Events.
@@ -116,6 +125,9 @@ type Status struct {
 	// Accepted counts readings from listed stations that reached the
 	// bucketer.
 	Accepted int64 `json:"accepted"`
+	// Unselected counts accepted readings that were kept in memory only
+	// because their station is not selected.
+	Unselected int64 `json:"unselected"`
 
 	Synced       bool  `json:"synced"`
 	Held         int   `json:"held"`
@@ -433,14 +445,62 @@ func (p *Pipeline) remember(key string, r model.Reading) {
 
 func (p *Pipeline) accept(r model.Reading) {
 	p.st.Accepted++
-	p.buckets.Add(r)
 	key := r.StationKey()
+	// Every discovered station is previewable (recent readings below), but
+	// only selected stations are aggregated for storage, and only with the
+	// fields the owner wants.
+	if sel, ok := p.forStorage(r); ok {
+		p.buckets.Add(sel)
+	} else {
+		p.st.Unselected++
+	}
 	buf := p.recent[key]
 	buf = append(buf, r)
 	if len(buf) > p.cfg.RecentPerStation {
 		buf = append([]model.Reading(nil), buf[len(buf)-p.cfg.RecentPerStation:]...)
 	}
 	p.recent[key] = buf
+}
+
+// forStorage applies Config.Selection to a reading. ok is false when the
+// station is not selected. Otherwise the returned reading carries only the
+// effective fields; the input is not modified because the recent buffer keeps
+// the full reading.
+func (p *Pipeline) forStorage(r model.Reading) (model.Reading, bool) {
+	if p.cfg.Selection == nil {
+		return r, true
+	}
+	st, found := p.tracker.Lookup(r.StationKey(), r.Time)
+	if !found {
+		st = model.Station{Key: r.StationKey(), Model: r.Model, ID: r.ID, Channel: r.Channel, Fields: r.FieldNames()}
+	}
+	selected, fields := p.cfg.Selection(st)
+	if !selected {
+		return r, false
+	}
+	keep := make(map[string]bool, len(fields))
+	for _, f := range fields {
+		keep[f] = true
+	}
+	out := r
+	out.Fields, out.Flags = nil, nil
+	for k, v := range r.Fields {
+		if keep[k] {
+			if out.Fields == nil {
+				out.Fields = map[string]float64{}
+			}
+			out.Fields[k] = v
+		}
+	}
+	for k, v := range r.Flags {
+		if keep[k] {
+			if out.Flags == nil {
+				out.Flags = map[string]bool{}
+			}
+			out.Flags[k] = v
+		}
+	}
+	return out, true
 }
 
 func (p *Pipeline) tickIfDue(ctx context.Context, now time.Time) {

@@ -4,11 +4,13 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/wxalerts/pws-gateway/internal/collector/rtl433"
 	"github.com/wxalerts/pws-gateway/internal/config"
+	"github.com/wxalerts/pws-gateway/internal/model"
 	"github.com/wxalerts/pws-gateway/internal/platform"
 	"github.com/wxalerts/pws-gateway/internal/platform/mock"
 	"github.com/wxalerts/pws-gateway/internal/web"
@@ -214,4 +216,35 @@ func contains(ss []string, s string) bool {
 		}
 	}
 	return false
+}
+
+func TestSelectionFollowsLiveConfig(t *testing.T) {
+	cs, dir := newConfig(t)
+	a, err := New(Deps{DataDir: dir, Config: cs, Platform: mock.New(), Logger: quietLogger()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := model.Station{Key: "Acurite-609TXC:224:", Model: "Acurite-609TXC", Fields: []string{"battery_ok", "humidity_pct", "temp_c"}}
+	if sel, _ := a.selection(st); sel {
+		t.Fatal("an unconfigured station must not be stored")
+	}
+	if _, err := cs.Update(func(c *config.Config) error {
+		c.Stations[st.Key] = config.Station{Selected: true}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sel, fields := a.selection(st)
+	if !sel || !slices.Equal(fields, []string{"temp_c", "humidity_pct"}) {
+		t.Fatalf("selected = %v fields = %v", sel, fields)
+	}
+	if _, err := cs.Update(func(c *config.Config) error {
+		c.Stations[st.Key] = config.Station{Selected: true, Fields: map[string]bool{"battery_ok": true, "humidity_pct": false}}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, fields := a.selection(st); !slices.Equal(fields, []string{"temp_c", "battery_ok"}) {
+		t.Fatalf("fields = %v", fields)
+	}
 }
