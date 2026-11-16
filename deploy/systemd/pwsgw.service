@@ -17,11 +17,14 @@ After=network-online.target time-sync.target
 Wants=network-online.target time-sync.target
 
 [Service]
-Type=notify
-# Type=notify expects the daemon to call sd_notify(READY=1); fall back to
-# Type=simple if that is not implemented yet.
-NotifyAccess=main
-ExecStart=/usr/local/bin/pwsgw --config /etc/pwsgw/config.yaml
+# The daemon does not call sd_notify yet, so Type=notify would time out.
+# Switch to notify once internal/web signals READY=1 after the listener is up.
+Type=simple
+# The daemon reads and writes its config under the state directory
+# (config.json) and takes the data directory from the flag or PWSGW_DATA_DIR.
+# The listener falls back to :8443 and :8080 only when it cannot bind the
+# privileged ports, which CAP_NET_BIND_SERVICE below prevents.
+ExecStart=/usr/local/bin/pwsgw run --data-dir /var/lib/pwsgw
 Restart=always
 RestartSec=5s
 TimeoutStopSec=30s
