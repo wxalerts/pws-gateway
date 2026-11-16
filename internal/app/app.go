@@ -14,6 +14,7 @@ import (
 	"math"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wxalerts/pws-gateway/internal/collector"
@@ -21,6 +22,7 @@ import (
 	"github.com/wxalerts/pws-gateway/internal/config"
 	"github.com/wxalerts/pws-gateway/internal/platform"
 	"github.com/wxalerts/pws-gateway/internal/store"
+	"github.com/wxalerts/pws-gateway/internal/uplink"
 	"github.com/wxalerts/pws-gateway/internal/version"
 	"github.com/wxalerts/pws-gateway/internal/web"
 )
@@ -52,6 +54,10 @@ type Deps struct {
 	ReplaySpeed       float64
 	ReplayRewriteTime bool
 
+	// UplinkDryRun builds and enqueues uplink messages but never connects to
+	// the broker, logging payload sizes (bench use).
+	UplinkDryRun bool
+
 	// Test hooks. Nil means the real thing.
 	Start     rtl433.StartFunc
 	Now       func() time.Time
@@ -66,6 +72,8 @@ type App struct {
 	store    *store.Store
 	writer   *store.Writer
 	pipeline *collector.Pipeline
+	// uplink is nil until setupUplink finds a claimed device.
+	uplink atomic.Pointer[uplink.Uplink]
 
 	// lines merges the output of every supervisor into one Source.
 	lines chan rtl433.Line
@@ -118,6 +126,7 @@ func New(deps Deps) (*App, error) {
 		Events:     a.onPipelineEvent,
 		Logger:     a.log,
 	})
+	a.setupUplink()
 	return a, nil
 }
 
@@ -196,6 +205,13 @@ func (a *App) Run(ctx context.Context) error {
 			}
 		})
 		wg.Go(func() { a.manageRadios(ctx) })
+	}
+	if u := a.uplink.Load(); u != nil {
+		wg.Go(func() {
+			if err := u.Run(ctx); err != nil && ctx.Err() == nil {
+				a.log.Error("uplink stopped", "err", err)
+			}
+		})
 	}
 	wg.Go(func() {
 		if err := a.pipeline.Run(ctx, src); err != nil && ctx.Err() == nil {

@@ -90,6 +90,7 @@ type runFlags struct {
 	dataDir, listen, redirect, logLevel string
 	rtl433Bin, replay                   string
 	replaySpeed                         float64
+	uplinkDryRun                        bool
 }
 
 func parseFlags(name string, args []string) (runFlags, error) {
@@ -102,6 +103,7 @@ func parseFlags(name string, args []string) (runFlags, error) {
 	fs.StringVar(&f.rtl433Bin, "rtl433-bin", "rtl_433", "rtl_433 executable, resolved from PATH when not a path")
 	fs.StringVar(&f.replay, "replay", "", "development: replay this rtl_433 JSONL file instead of starting rtl_433")
 	fs.Float64Var(&f.replaySpeed, "replay-speed", 10, "replay speed multiplier, 0 for as fast as possible")
+	fs.BoolVar(&f.uplinkDryRun, "uplink-dry-run", false, "bench: build and enqueue uplink messages, log their sizes, never connect to the broker")
 	if err := fs.Parse(args); err != nil {
 		return f, err
 	}
@@ -193,7 +195,7 @@ func runCmd(args []string) error {
 
 	rt, err := app.New(app.Deps{
 		DataDir: f.dataDir, Config: cfgStore, Platform: plat, Logger: logger,
-		Rtl433Bin: f.rtl433Bin, ReplayFile: f.replay, ReplaySpeed: f.replaySpeed, ReplayRewriteTime: true,
+		Rtl433Bin: f.rtl433Bin, ReplayFile: f.replay, ReplaySpeed: f.replaySpeed, ReplayRewriteTime: true, UplinkDryRun: f.uplinkDryRun,
 	})
 	if err != nil {
 		return err

@@ -205,6 +205,7 @@ func (a *App) onRadioEvent(e rtl433.Event) {
 		attrs := []any{"radio", e.Radio, "event", string(e.Type), "err", errString(e.Err)}
 		if errors.Is(e.Err, rtl433.ErrNoDevice) {
 			a.log.Warn("sdr_missing: "+e.Message, attrs...)
+			a.noteSDRMissing(e)
 			return
 		}
 		a.log.Warn(e.Message, attrs...)
@@ -212,6 +213,9 @@ func (a *App) onRadioEvent(e rtl433.Event) {
 }
 
 func (a *App) onPipelineEvent(e collector.Event) {
+	if u := a.uplink.Load(); u != nil {
+		u.HandleCollectorEvent(e)
+	}
 	switch e.Type {
 	case collector.EventSensorFound:
 		a.log.Info("sensor_found", "station", e.Message, "model", stationModel(e))

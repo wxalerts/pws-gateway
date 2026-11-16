@@ -79,7 +79,7 @@ func (r readingsSource) Readings(_ context.Context, station string, since time.T
 }
 
 // statusSource implements web.StatusSource. Uplink and update state come from
-// the Nop defaults until those subsystems exist. The USB reset count is read
+// the uplink when the device is claimed, else from the Nop defaults. The USB reset count is read
 // by the web layer straight from the platform.
 type statusSource struct {
 	web.NopStatus
@@ -99,6 +99,17 @@ func (s statusSource) Outbox(ctx context.Context) web.Outbox {
 		}
 	}
 	return o
+}
+
+// Uplink reports the MQTT connection state, empty while the device is unclaimed.
+func (s statusSource) Uplink(context.Context) web.UplinkStatus { return s.app.uplinkStatus() }
+
+// Update reports the retained update state the uplink publishes.
+func (s statusSource) Update(ctx context.Context) web.UpdateStatus {
+	if u, ok := s.app.updateStatus(); ok {
+		return u
+	}
+	return s.NopStatus.Update(ctx)
 }
 
 // RadioStatus reports "running", "starting" or "error: <reason>" for a
