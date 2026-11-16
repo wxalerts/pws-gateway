@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/wxalerts/pws-gateway/internal/aggregate"
+	"github.com/wxalerts/pws-gateway/internal/collector/mapping"
 	"github.com/wxalerts/pws-gateway/internal/config"
 	"github.com/wxalerts/pws-gateway/internal/contract"
 	"github.com/wxalerts/pws-gateway/internal/model"
@@ -129,13 +130,33 @@ func (u *Uplink) loadBuckets(ctx context.Context, cfg config.Config, keys []stri
 	return out, nil
 }
 
+// selectFields returns b limited to the station's effective fields. The
+// collector already stores only those, but the owner may have unticked a field
+// since, and history stored earlier must not leak out through a resync.
+func selectFields(b *model.Bucket, ann config.Station) *model.Bucket {
+	mod := b.StationKey
+	if m, _, _, ok := model.SplitStationKey(b.StationKey); ok {
+		mod = m
+	}
+	keep := ann.EffectiveFields(mapping.DefaultFields(mod, b.FieldNames()))
+	out := *b
+	out.Fields = make(map[string]model.Aggregate, len(keep))
+	for _, name := range keep {
+		if a, ok := b.Fields[name]; ok {
+			out.Fields[name] = a
+		}
+	}
+	return &out
+}
+
 // stationFromBucket converts one stored rollup to the wire form, adding the
-// owner's site metadata, the radio signal block and the raw passthrough from
-// the readings still held in memory for that bucket. Rollups carry no raw or
+// owner's site metadata, the radio signal block and, when the owner allows it
+// (config.Station.RawIncluded), the raw passthrough from the readings still
+// held in memory for that bucket. Rollups carry no raw or
 // signal data, so a bucket older than the in-memory window (a long replay)
 // goes out without them.
 func stationFromBucket(b *model.Bucket, ann config.Station, recent []model.Reading) (contract.Station, bool) {
-	f := fieldsFromBucket(b)
+	f := fieldsFromBucket(selectFields(b, ann))
 	end := b.Start.Add(BucketWidth)
 	st := contract.Station{Key: b.StationKey, N: b.N, F: f}
 	alt, wind := ann.AltM, ann.WindHeightM
@@ -166,7 +187,7 @@ func stationFromBucket(b *model.Bucket, ann config.Station, recent []model.Readi
 		a, s := finite(rssi/float64(levels)), finite(snr/float64(levels))
 		st.Sig = &contract.Signal{RSSIdB: &a, SNRdB: &s}
 	}
-	if len(raw) > 0 {
+	if len(raw) > 0 && ann.RawIncluded() {
 		if data, err := json.Marshal(raw); err == nil {
 			st.Raw = data
 		}
