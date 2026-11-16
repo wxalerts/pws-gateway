@@ -732,3 +732,30 @@ legend.field-label {
 .steps li + li {
   margin-top: 6px;
 }
+
+/* Field checklist on the station page */
+.field-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-row .field-value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.short-labels {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}

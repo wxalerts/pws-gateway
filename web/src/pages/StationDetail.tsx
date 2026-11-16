@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, errorMessage, type Reading, type Station } from '../api';
+import { api, errorMessage, type Reading, type Station, type StationUpdate } from '../api';
 import { Alert } from '../components/Alert';
 import { Badge } from '../components/Badge';
 import { Card } from '../components/Card';
+import { DataToUse } from '../components/DataToUse';
 import { Chart, type ChartSeries } from '../components/Chart';
 import { Stat, StatGrid } from '../components/Stat';
 import { formatDateTime, formatRelative } from '../lib/format';
@@ -149,6 +150,7 @@ export function StationDetailPage() {
   const [rangeIdx, setRangeIdx] = useState(2);
   const range = RANGES[rangeIdx];
   const stations = usePoll((s) => api.stations.list({ signal: s }), 15000);
+  const refreshStations = stations.refresh;
   const station: Station | null = stations.data?.find((s) => s.key === key) ?? null;
   const { readings, error, loading } = useReadings(key, range.seconds);
 
@@ -175,6 +177,15 @@ export function StationDetailPage() {
         (c) => c.data !== null,
       ),
     [readings, system],
+  );
+
+  const saveSelection = useCallback(
+    async (patch: StationUpdate) => {
+      if (!key) return;
+      await api.stations.update(key, patch);
+      await refreshStations();
+    },
+    [key, refreshStations],
   );
 
   if (!key) return <Alert tone="bad">No station given.</Alert>;
@@ -242,6 +253,16 @@ export function StationDetailPage() {
             <p className="muted">Nothing recorded for this station in the selected range.</p>
           )}
         </Card>
+
+        {station && (
+          <DataToUse
+            key={station.key}
+            station={station}
+            latest={latestByField}
+            system={system}
+            onSave={saveSelection}
+          />
+        )}
 
         {charts.map(({ spec, data }) => (
           <Card

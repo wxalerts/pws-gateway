@@ -79,17 +79,19 @@ export function StationsTable({ stations, onSelect, onEdit, busyKey }: StationsT
     },
     {
       key: 'fields',
-      header: 'Reports',
+      header: 'Fields',
       optional: true,
-      render: (s) => (
-        <div className="chips">
-          {s.fields.map((f) => (
-            <span key={f} className="chip" title={fieldMeta(f).label}>
-              {f}
-            </span>
-          ))}
-        </div>
-      ),
+      render: (s) =>
+        s.fields.length === 0 ? (
+          <span className="muted">none</span>
+        ) : (
+          <span
+            className={`short-labels${s.selected ? '' : ' muted'}`}
+            title={`${s.selected ? 'Used' : 'Would be used'}: ${s.fields.map((f) => fieldMeta(f).label).join(', ')}`}
+          >
+            {s.fields.map((f) => fieldMeta(f).short).join(' ')}
+          </span>
+        ),
     },
     {
       key: 'n',
@@ -238,7 +240,7 @@ export function StationsPage() {
       await api.stations.update(station.key, { selected: true });
       setNotice({
         tone: 'ok',
-        text: `${station.name || station.model} is now the station uploaded to WxAlerts.`,
+        text: `${station.name || station.model} is selected with its default fields. Open the station to change which fields are used.`,
       });
       await poll.refresh();
     } catch (err) {
@@ -271,7 +273,8 @@ export function StationsPage() {
       <div className="stack">
         <p className="muted">
           Everything the radio can decode shows up here, including neighbours' sensors. Select the
-          one that is yours; only that station is uploaded to WxAlerts.
+          stations you want to use. Only selected stations, and the fields you tick for each, are
+          stored and uploaded to WxAlerts. You can select more than one.
         </p>
         {notice && (
           <Alert tone={notice.tone} live>

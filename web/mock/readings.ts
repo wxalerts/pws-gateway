@@ -30,7 +30,7 @@ export function readingAt(station: MockStation, tsMs: number): Reading {
   const stationSalt = station.id * 7;
 
   const f: Record<string, number> = {};
-  const has = (name: string) => station.fields.includes(name);
+  const has = (name: string) => station.fields_available.includes(name);
 
   if (has('temp_c')) f.temp_c = round(14 + 7 * diurnal + jitter(slot, stationSalt + 1, 0.15), 1);
   if (has('humidity_pct')) {

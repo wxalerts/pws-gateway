@@ -7,7 +7,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
-import { createState, uptimeSeconds, type MockState } from './state';
+import { createState, recompute, toApi, uptimeSeconds, type MockState } from './state';
 import { readingsSince } from './readings';
 
 const COOKIE = 'pwsgw_session';
@@ -209,7 +209,7 @@ async function route(
       // Keep the active stations looking live.
       if (s.n_sightings > 100) s.last_seen = new Date(now - (now % 16_000)).toISOString();
     }
-    return send(res, 200, state.stations);
+    return send(res, 200, state.stations.map(toApi));
   }
 
   const stationMatch = path.match(/^\/api\/stations\/(.+)$/);
@@ -219,15 +219,24 @@ async function route(
     if (!s) return fail(res, 404, 'not_found', `No station with key ${key}`);
     if (!isObject(body)) return fail(res, 400, 'bad_request', 'Body must be an object');
     if (typeof body.selected === 'boolean') {
-      if (body.selected) for (const other of state.stations) other.selected = false;
       s.selected = body.selected;
     }
+    if (body.fields === null) s.overrides = {};
+    else if (isObject(body.fields)) {
+      for (const [k, v] of Object.entries(body.fields)) {
+        if (typeof v === 'boolean') s.overrides[k] = v;
+      }
+    }
+    if (body.include_raw === null || typeof body.include_raw === 'boolean') {
+      s.includeRawOverride = body.include_raw;
+    }
+    recompute(s);
     if (typeof body.name === 'string') s.name = body.name.slice(0, 64);
     if (body.alt_m === null || typeof body.alt_m === 'number') s.alt_m = body.alt_m;
     if (body.wind_height_m === null || typeof body.wind_height_m === 'number') {
       s.wind_height_m = body.wind_height_m;
     }
-    return send(res, 200, s);
+    return send(res, 200, toApi(s));
   }
 
   if (path === '/api/radios' && method === 'GET') return send(res, 200, state.radios);

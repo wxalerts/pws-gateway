@@ -24,25 +24,33 @@ export interface FieldMeta {
   /** Field name in the readings payload. */
   key: string;
   label: string;
+  /** One to two letter label for compact lists. */
+  short: string;
   quantity: Quantity;
   /** Decimal places when rendering a value. */
   digits: number;
 }
 
 export const FIELDS: FieldMeta[] = [
-  { key: 'temp_c', label: 'Temperature', quantity: 'temperature', digits: 1 },
-  { key: 'humidity_pct', label: 'Humidity', quantity: 'percent', digits: 0 },
-  { key: 'pressure_station_hpa', label: 'Pressure', quantity: 'pressure', digits: 1 },
-  { key: 'wind_speed_ms', label: 'Wind speed', quantity: 'speed', digits: 1 },
-  { key: 'wind_gust_ms', label: 'Wind gust', quantity: 'speed', digits: 1 },
-  { key: 'wind_dir_deg', label: 'Wind direction', quantity: 'direction', digits: 0 },
-  { key: 'rain_mm', label: 'Rain total', quantity: 'rain', digits: 1 },
-  { key: 'uv_index', label: 'UV index', quantity: 'index', digits: 1 },
-  { key: 'light_lux', label: 'Light', quantity: 'lux', digits: 0 },
-  { key: 'solar_wm2', label: 'Solar', quantity: 'irradiance', digits: 0 },
-  { key: 'lightning_count', label: 'Lightning strikes', quantity: 'count', digits: 0 },
-  { key: 'lightning_km', label: 'Lightning distance', quantity: 'distance', digits: 0 },
-  { key: 'battery_ok', label: 'Battery', quantity: 'boolean', digits: 0 },
+  { key: 'temp_c', label: 'Temperature', short: 'T', quantity: 'temperature', digits: 1 },
+  { key: 'humidity_pct', label: 'Humidity', short: 'H', quantity: 'percent', digits: 0 },
+  { key: 'pressure_station_hpa', label: 'Pressure', short: 'P', quantity: 'pressure', digits: 1 },
+  { key: 'wind_speed_ms', label: 'Wind speed', short: 'W', quantity: 'speed', digits: 1 },
+  { key: 'wind_gust_ms', label: 'Wind gust', short: 'WG', quantity: 'speed', digits: 1 },
+  { key: 'wind_dir_deg', label: 'Wind direction', short: 'WD', quantity: 'direction', digits: 0 },
+  { key: 'rain_mm', label: 'Rain total', short: 'R', quantity: 'rain', digits: 1 },
+  { key: 'uv_index', label: 'UV index', short: 'UV', quantity: 'index', digits: 1 },
+  { key: 'light_lux', label: 'Light', short: 'Lx', quantity: 'lux', digits: 0 },
+  { key: 'solar_wm2', label: 'Solar', short: 'S', quantity: 'irradiance', digits: 0 },
+  { key: 'lightning_count', label: 'Lightning strikes', short: 'Ln', quantity: 'count', digits: 0 },
+  {
+    key: 'lightning_km',
+    label: 'Lightning distance',
+    short: 'Ld',
+    quantity: 'distance',
+    digits: 0,
+  },
+  { key: 'battery_ok', label: 'Battery', short: 'B', quantity: 'boolean', digits: 0 },
 ];
 
 const FIELD_BY_KEY: Record<string, FieldMeta> = Object.fromEntries(FIELDS.map((f) => [f.key, f]));
@@ -52,6 +60,7 @@ export function fieldMeta(key: string): FieldMeta {
     FIELD_BY_KEY[key] ?? {
       key,
       label: key.replace(/_/g, ' '),
+      short: key.slice(0, 2).toUpperCase(),
       quantity: 'count',
       digits: 2,
     }

@@ -57,7 +57,16 @@ export interface Station {
   rssi_db: number;
   snr_db: number;
   battery_ok: boolean;
+  /** Canonical fields that are stored and uploaded (or would be, if selected). */
   fields: string[];
+  /** Every canonical field this station has reported. */
+  fields_available: string[];
+  /** Decoder fields with no canonical name that this station has reported. */
+  raw_fields: string[];
+  /** The model default for the available fields. */
+  fields_default: string[];
+  /** Whether unmapped decoder fields are uploaded under "raw". */
+  include_raw: boolean;
   n_sightings: number;
   selected: boolean;
   name: string;
@@ -70,6 +79,10 @@ export interface StationUpdate {
   name?: string;
   alt_m?: number | null;
   wind_height_m?: number | null;
+  /** Partial: name to on/off. null clears every override (model default). */
+  fields?: Record<string, boolean> | null;
+  /** null returns to the default (on once the station is selected). */
+  include_raw?: boolean | null;
 }
 
 export type RadioRole = 'rtl_433' | 'disabled';

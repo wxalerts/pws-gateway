@@ -16,6 +16,10 @@ function station(overrides: Partial<Station>): Station {
     snr_db: 21.4,
     battery_ok: true,
     fields: ['temp_c', 'humidity_pct', 'wind_speed_ms'],
+    fields_available: ['temp_c', 'humidity_pct', 'wind_speed_ms', 'battery_ok'],
+    raw_fields: [],
+    fields_default: ['temp_c', 'humidity_pct', 'wind_speed_ms'],
+    include_raw: false,
     n_sightings: 4812,
     selected: false,
     name: '',
@@ -67,14 +71,14 @@ describe('StationsTable', () => {
     expect(first.getByText('Fineoffset-WH65B id 49')).toBeInTheDocument();
     expect(first.getByText('-62 dB')).toBeInTheDocument();
     expect(first.getByText('OK')).toBeInTheDocument();
-    expect(first.getByText('wind_speed_ms')).toBeInTheDocument();
+    expect(first.getByText('T H W')).toBeInTheDocument();
     expect(first.getByText('4,812')).toBeInTheDocument();
 
     const second = within(rows[1]);
     expect(second.getByRole('link', { name: 'Front yard' })).toBeInTheDocument();
     expect(second.getByText('Acurite-5n1 id 3146 ch 1')).toBeInTheDocument();
     expect(second.getByText('Low')).toBeInTheDocument();
-    expect(second.getByText('rain_mm')).toBeInTheDocument();
+    expect(second.getByText('T R')).toBeInTheDocument();
   });
 
   it('marks the selected station and hides its Select button', () => {
