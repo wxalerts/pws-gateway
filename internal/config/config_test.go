@@ -216,3 +216,35 @@ func TestSaveIsAtomic(t *testing.T) {
 		t.Fatal("Save must validate")
 	}
 }
+
+func TestApplySectionsAtomic(t *testing.T) {
+	s := NewStore(t.TempDir())
+	if _, err := s.Load(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ApplySections(map[string]json.RawMessage{
+		"history":  json.RawMessage(`{"cadence_minutes": 30}`),
+		"stations": json.RawMessage(`{"Acurite-5n1:1:A": {"selected": true, "alt_m": 12}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.History.CadenceMinutes != 30 || !got.Stations["Acurite-5n1:1:A"].Selected {
+		t.Fatalf("not applied: %+v", got)
+	}
+
+	// One bad section rejects the whole patch and leaves the earlier one out.
+	_, err = s.ApplySections(map[string]json.RawMessage{
+		"history": json.RawMessage(`{"cadence_minutes": 60}`),
+		"updates": json.RawMessage(`{"window": "nope", "channel": "stable"}`),
+	})
+	if err == nil {
+		t.Fatal("invalid section accepted")
+	}
+	if s.Get().History.CadenceMinutes != 30 {
+		t.Fatal("partial patch was applied")
+	}
+	if _, err := s.ApplySections(map[string]json.RawMessage{"shell": json.RawMessage(`{}`)}); !errors.Is(err, ErrUnknownSection) {
+		t.Fatalf("unknown section: %v", err)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 
 	"github.com/wxalerts/pws-gateway/internal/atomicfile"
@@ -126,6 +127,31 @@ func (s *Store) Update(fn func(*Config) error) (Config, error) {
 func (s *Store) Apply(section string, raw json.RawMessage) (Config, error) {
 	return s.Update(func(c *Config) error {
 		return c.applySection(section, raw)
+	})
+}
+
+// ApplySections replaces several sections in one validated write. Either every
+// section applies or none does, so a remote patch that is half valid never
+// leaves the file half changed. Each section goes through the same decoding
+// and validation as Apply. Sections are applied in the order of Sections so
+// the result does not depend on map iteration.
+func (s *Store) ApplySections(sections map[string]json.RawMessage) (Config, error) {
+	for name := range sections {
+		if !slices.Contains(Sections, name) {
+			return Config{}, fmt.Errorf("%w: %q", ErrUnknownSection, name)
+		}
+	}
+	return s.Update(func(c *Config) error {
+		for _, name := range Sections {
+			raw, ok := sections[name]
+			if !ok {
+				continue
+			}
+			if err := c.applySection(name, raw); err != nil {
+				return fmt.Errorf("section %s: %w", name, err)
+			}
+		}
+		return nil
 	})
 }
 
