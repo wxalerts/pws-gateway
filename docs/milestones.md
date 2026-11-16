@@ -174,32 +174,41 @@ proposed caps; schema validation of every published message in tests.
 
 Acceptance tests:
 
-- [ ] On connect the device publishes retained `online` on `status`, sets an
+- [x] On connect the device publishes retained `online` on `status`, sets an
       LWT of `offline`, and every message it publishes validates against the
       matching schema in `schemas/`.
 - [ ] The uplink offset for a device ID is deterministic, lies in [0, 900) s,
       and two different IDs from a sample of 1,000 are spread with no more than
       1% landing in any one 10 s slot.
-- [ ] With the fake time source unsynced, no `obs` message is published and a
+      Not ticked: the offset is deterministic and within [0, 900) s (tested),
+      but 1,000 ids over 90 ten-second slots average 11.1 per slot, so "no
+      more than 1% in any slot" cannot hold for any mapping. The test asserts
+      at most 2.5% per slot. Decide the intended bound, then tick.
+- [x] With the fake time source unsynced, no `obs` message is published and a
       `time_unsynced` event is published once; after sync, buffered buckets go
       out.
-- [ ] With the broker unreachable for a simulated 2 hours, the outbox holds
+- [x] With the broker unreachable for a simulated 2 hours, the outbox holds
       every 5-minute bucket for each selected station; on reconnect, replay
       sends at most 20 buckets per message, no faster than the rate decided in
       the spike (see the contract's Open section), with `seq` strictly
       increasing.
-- [ ] When the outbox exceeds its cap, the oldest `tel` and `event` entries
+- [x] When the outbox exceeds its cap, the oldest `tel` and `event` entries
       are dropped first, then the oldest `obs` buckets, and no bucket from the
       last 24 hours is ever dropped; an `outbox_overflow` event is published
       once per overflow episode.
-- [ ] A backlog larger than 64 KB is split into several messages at bucket
+- [x] A backlog larger than 64 KB is split into several messages at bucket
       boundaries and each message is under 64 KB.
 - [ ] A `config` command with a valid signature, matching `device_id`, future
       `exp` and unseen `id` is applied through commit-confirm and acked on
       `ack/{id}` with `ok: true`. Commands with a bad signature, another
       device's ID, a past `exp`, or a replayed `id` are each rejected, not
       applied, and never acked as success.
-- [ ] A message on `cmd/shell` or any undocumented type is rejected before
+      Not ticked: bad signature, other device, past `exp` and replayed `id`
+      are tested and the valid command is applied and acked (over a real MQTT
+      connection), but the patch goes in through `config.Store.ApplySections`
+      (atomic, same validation as the web API) without the commit-confirm
+      rollback. Remote commit-confirm needs the reconnect confirm path.
+- [x] A message on `cmd/shell` or any undocumented type is rejected before
       signature verification and logged; no code path exists that executes a
       string from a command body (asserted by a test that the `diag` allowlist
       is a closed enum).
