@@ -1,0 +1,6 @@
+{
+  "v": 0,
+  "ts": "2026-11-16T14:25:00.123456Z",
+  "type": "outbox_overflow",
+  "detail": { "dropped": 42, "oldest_kept": "2026-11-15T14:25:00Z" }
+}

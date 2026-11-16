@@ -1,0 +1,10 @@
+{
+  "v": 0,
+  "id": "c_05",
+  "device_id": "d_8f3a",
+  "type": "diag",
+  "ok": true,
+  "error": null,
+  "result": { "broker_ms": 118, "manifest_ms": 342, "dns": "ok" },
+  "ts": "2026-11-16T14:32:00Z"
+}

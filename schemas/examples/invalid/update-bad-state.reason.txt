@@ -1,0 +1,1 @@
+state 'installing' is not in the update state machine.

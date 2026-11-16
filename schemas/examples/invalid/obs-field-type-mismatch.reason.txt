@@ -1,0 +1,1 @@
+rain_mm is a counter and must carry 'sum'; here it carries 'avg', which is the gauge shape.

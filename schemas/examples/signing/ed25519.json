@@ -1,0 +1,92 @@
+{
+  "description": "Test vectors for signed PWS commands. The seed is a PUBLISHED TEST KEY shared by every implementation's test suite; it must never sign a real command. Regenerate with: go test ./internal/contract -run TestSigningVectors -update",
+  "algorithm": "Ed25519 (RFC 8032) over the RFC 8785 canonical JSON of the object {id, type, device_id, exp, body}. On the wire the signature is carried in 'sig' as standard base64 with padding (RFC 4648 section 4). verify_at is the clock value at which each command is still unexpired.",
+  "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+  "verify_at": "2026-11-16T14:30:00Z",
+  "vectors": [
+    {
+      "name": "config",
+      "command": {
+        "type": "config",
+        "id": "c_01",
+        "device_id": "d_8f3a",
+        "exp": "2026-11-16T15:00:00Z",
+        "body": {
+          "uplink": {
+            "interval_s": 300,
+            "jitter_s": 45.0
+          },
+          "stations": [
+            {
+              "selected": true,
+              "key": "Acurite-5n1:1234:A"
+            }
+          ],
+          "note": "caf\u00e9 \"quoted\" \\ slash/ 1E2"
+        }
+      },
+      "canonical": "{\"body\":{\"note\":\"café \\\"quoted\\\" \\\\ slash/ 1E2\",\"stations\":[{\"key\":\"Acurite-5n1:1234:A\",\"selected\":true}],\"uplink\":{\"interval_s\":300,\"jitter_s\":45}},\"device_id\":\"d_8f3a\",\"exp\":\"2026-11-16T15:00:00Z\",\"id\":\"c_01\",\"type\":\"config\"}",
+      "signature_hex": "018518889bd507164713a961ff300b6d35a2d6fa9d808f6d7e944b969ee229b1fff27baeb792cdcae3ae481b69b6ee78b26e246dc0df21c7c1254ec09c811806",
+      "sig": "AYUYiJvVBxZHE6lh/zALbTWi1vqdgI9tfpRLlp7iKbH/8nuut5LNyuOuSBtptu54sm4kbcDfIcfBJU7AnIEYBg=="
+    },
+    {
+      "name": "reboot",
+      "command": {
+        "id": "c_02",
+        "type": "reboot",
+        "device_id": "d_8f3a",
+        "exp": "2026-11-16T15:00:00Z",
+        "body": {}
+      },
+      "canonical": "{\"body\":{},\"device_id\":\"d_8f3a\",\"exp\":\"2026-11-16T15:00:00Z\",\"id\":\"c_02\",\"type\":\"reboot\"}",
+      "signature_hex": "6cd4d167faa8348cce99b6360282899bbf4f43c11f05627e0fd143c690e30219bda04989479e13655844053d703b9f4cf720ba28720dd8dec785ee488ae0010a",
+      "sig": "bNTRZ/qoNIzOmbY2AoKJm79PQ8EfBWJ+D9FDxpDjAhm9oEmJR54TZVhEBT1wO59M9yC6KHIN2N7Hhe5IiuABCg=="
+    },
+    {
+      "name": "diag-restart-service",
+      "command": {
+        "id": "c_03",
+        "type": "diag",
+        "device_id": "d_8f3a",
+        "exp": "2026-11-16T15:00:00Z",
+        "body": {
+          "service": "rtl_433",
+          "action": "restart_service"
+        }
+      },
+      "canonical": "{\"body\":{\"action\":\"restart_service\",\"service\":\"rtl_433\"},\"device_id\":\"d_8f3a\",\"exp\":\"2026-11-16T15:00:00Z\",\"id\":\"c_03\",\"type\":\"diag\"}",
+      "signature_hex": "b0253cd0c8256b9a2a76a8df25d4c4ff98a5dd3282526439a178afd7ad6383a6c30c94df0f95e7e9d0fa0b3d8e884e86198db2ece7d9827adda732925e1e4e0e",
+      "sig": "sCU80Mgla5oqdqjfJdTE/5il3TKCUmQ5oXiv161jg6bDDJTfD5Xn6dD6Cz2OiE6GGY2y7OfZgnrdpzKSXh5ODg=="
+    },
+    {
+      "name": "resync",
+      "command": {
+        "id": "c_04",
+        "type": "resync",
+        "device_id": "d_8f3a",
+        "exp": "2026-11-16T15:00:00Z",
+        "body": {
+          "to": "2026-11-16T14:00:00Z",
+          "from": "2026-11-16T12:00:00Z"
+        }
+      },
+      "canonical": "{\"body\":{\"from\":\"2026-11-16T12:00:00Z\",\"to\":\"2026-11-16T14:00:00Z\"},\"device_id\":\"d_8f3a\",\"exp\":\"2026-11-16T15:00:00Z\",\"id\":\"c_04\",\"type\":\"resync\"}",
+      "signature_hex": "9aabca35ea250fe204acec1b5053cdf9017796cedbf6d59099fff3eadd34b99640d04e20b97eb81a1bbe589466c2c41927d701e2ff77f0cc99f03f16f00b420a",
+      "sig": "mqvKNeolD+IErOwbUFPN+QF3ls7b9tWQmf/z6t00uZZA0E4guX64Ghu+WJRmwsQZJ9cB4v938MyZ8D8W8AtCCg=="
+    },
+    {
+      "name": "update-check",
+      "command": {
+        "id": "c_05",
+        "type": "update-check",
+        "device_id": "pi-garden-01",
+        "exp": "2026-11-16T15:05:00Z",
+        "body": {}
+      },
+      "canonical": "{\"body\":{},\"device_id\":\"pi-garden-01\",\"exp\":\"2026-11-16T15:05:00Z\",\"id\":\"c_05\",\"type\":\"update-check\"}",
+      "signature_hex": "1227e81eb5334c084e77322c9afce1d5544a1aa65dd74c025e4aa1ff628da484188864a0df2487ba691c3e019e40b2d765a14c6d5bd69ca1319a5912c6f41a00",
+      "sig": "EifoHrUzTAhOdzIsmvzh1VRKGqZd10wCXkqh/2KNpIQYiGSg3ySHumkcPgGeQLLXZaFMbVvWnKExmlkSxvQaAA=="
+    }
+  ]
+}

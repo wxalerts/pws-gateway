@@ -1,0 +1,1 @@
+body.action 'shell' is not on the diag allow list (restart_service, rediscover, connectivity_test, clear_outbox).

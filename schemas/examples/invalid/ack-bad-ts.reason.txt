@@ -1,0 +1,1 @@
+ts is a Unix epoch number; timestamps are RFC 3339 UTC strings.

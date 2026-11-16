@@ -1,0 +1,1 @@
+"connected" is not a status value; only "online" and "offline" are.

@@ -1,0 +1,1 @@
+detail is an array; it must be an object.

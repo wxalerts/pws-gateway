@@ -1,0 +1,18 @@
+{
+  "v": 0,
+  "device_id": "d_8f3a",
+  "ts": "2026-11-16T14:30:03Z",
+  "fw": "0.2.0-rc1",
+  "os": "0.1.1",
+  "uptime_s": 45,
+  "time": { "src": "rtc", "offset_ms": 0, "synced": false },
+  "sys": { "cpu_temp_c": 41.0, "throttled": 327680, "mem_free_mb": 388.5 },
+  "outbox": { "depth": 12, "oldest_s": 3600 },
+  "sdr": [
+    { "radio_id": "00000001", "driver": "rtl_433", "band_mhz": 433.92, "decoders": 258, "packets_15m": 0 },
+    { "radio_id": "00000002", "driver": "davis", "band_mhz": 915, "decoders": 1, "packets_15m": 36 }
+  ],
+  "net": { "link": "wifi", "x_ssid_hash": "9f2c" },
+  "gps": { "fix": 0, "sats": 0 },
+  "x_experimental": { "anything": true }
+}

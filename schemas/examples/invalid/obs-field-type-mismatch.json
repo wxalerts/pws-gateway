@@ -1,0 +1,10 @@
+{
+  "v": 0,
+  "device_id": "d_8f3a",
+  "seq": 6,
+  "sent": "2026-11-16T14:15:03Z",
+  "interval_s": 300,
+  "buckets": [ { "start": "2026-11-16T14:00:00Z", "stations": [
+    { "key": "Acurite-5n1:1234:A", "n": 7, "f": { "rain_mm": { "avg": 0.3 } } }
+  ] } ]
+}

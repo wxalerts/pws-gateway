@@ -1,0 +1,7 @@
+{
+  "v": 0,
+  "device_id": "d_8f3a",
+  "sent": "2026-11-16T14:15:03Z",
+  "interval_s": 300,
+  "buckets": [ { "start": "2026-11-16T14:00:00Z", "stations": [] } ]
+}

@@ -1,0 +1,1 @@
+body.from is required for resync so the device knows where to start replaying.

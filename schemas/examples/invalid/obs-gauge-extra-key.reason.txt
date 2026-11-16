@@ -1,0 +1,1 @@
+f.temp_c carries 'median', which is not one of avg, min, max. Field value objects are strict.

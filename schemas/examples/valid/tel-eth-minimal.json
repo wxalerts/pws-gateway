@@ -1,0 +1,11 @@
+{
+  "v": 0,
+  "device_id": "pi-garden-01",
+  "ts": "2026-11-16T14:15:03Z",
+  "fw": "0.1.0",
+  "uptime_s": 0,
+  "time": { "src": "ntp", "offset_ms": -1.5, "synced": true },
+  "sys": {},
+  "outbox": { "depth": 3, "oldest_s": 912 },
+  "net": { "link": "eth" }
+}

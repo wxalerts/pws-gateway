@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.wxalerts.org/pws/v0/status.schema.json",
+  "title": "PWS status message",
+  "description": "Connection state published retained on pws/{device_id}/status (QoS 1). The device publishes \"online\" after connecting and registers \"offline\" as its last will. The payload is the JSON string, quotes included, so that it parses with the same JSON tooling as every other message. The contract page lists the two words without saying whether they are quoted; the JSON string form is this schema's reading and is listed as a proposed clarification in schemas/README.md.",
+  "type": "string",
+  "enum": ["online", "offline"]
+}

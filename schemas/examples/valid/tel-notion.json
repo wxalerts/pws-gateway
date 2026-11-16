@@ -1,0 +1,15 @@
+{
+  "v": 0,
+  "device_id": "d_8f3a",
+  "ts": "2026-11-16T14:15:03Z",
+  "fw": "0.1.0",
+  "os": "0.1.0",
+  "uptime_s": 86400,
+  "time": { "src": "ntp", "offset_ms": 3, "synced": true },
+  "sys": { "cpu_temp_c": 52.1, "throttled": 0, "mem_free_mb": 410, "data_used_pct": 4 },
+  "outbox": { "depth": 0, "oldest_s": 0 },
+  "sdr": [{ "band_mhz": 433.92, "decoders": 258, "packets_15m": 212 }],
+  "net": { "link": "lte" },
+  "modem": { "carrier": "AT&T", "mcc_mnc": "310410", "reg": "home", "tech": "lte", "rssi_dbm": -83 },
+  "gps": { "fix": 3, "sats": 9, "lat": 30.63, "lon": -87.03, "alt_m": 31 }
+}

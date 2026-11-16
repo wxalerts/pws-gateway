@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.wxalerts.org/pws/v0/update.schema.json",
+  "title": "PWS update message",
+  "description": "Current firmware version and update state, published retained on pws/{device_id}/update (QoS 1) whenever the state changes. The contract example carries no 'v' or 'device_id'; both are accepted as optional additive fields and proposed as required in schemas/README.md. Unknown keys are ignored by the server.",
+  "type": "object",
+  "properties": {
+    "v": { "description": "Payload version. Optional until the contract adds it to the update example.", "$ref": "common.schema.json#/$defs/version" },
+    "device_id": { "description": "Publishing device. Optional; the topic already carries it.", "$ref": "common.schema.json#/$defs/device_id" },
+    "current": { "description": "Firmware version currently running.", "$ref": "common.schema.json#/$defs/version_string" },
+    "target": {
+      "description": "Version the device is moving to, or null when no update is pending (state idle or good).",
+      "oneOf": [
+        { "$ref": "common.schema.json#/$defs/version_string" },
+        { "type": "null" }
+      ]
+    },
+    "state": {
+      "description": "Update state machine position. 'deferred' (for example weak LTE signal) is not a failure. 'good' means the new version booted and confirmed itself; 'rolled_back' means the bootloader returned to the previous slot.",
+      "type": "string",
+      "enum": ["idle", "downloading", "staged", "rebooting", "good", "rolled_back", "failed", "deferred"]
+    },
+    "error": {
+      "description": "Human readable error for state failed or rolled_back, null otherwise.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "null" }
+      ]
+    },
+    "ts": { "description": "Time of the last state change, UTC.", "$ref": "common.schema.json#/$defs/timestamp" }
+  },
+  "required": ["current", "target", "state", "error", "ts"],
+  "additionalProperties": true
+}

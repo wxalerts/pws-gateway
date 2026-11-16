@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.wxalerts.org/pws/v0/obs.schema.json",
+  "title": "PWS obs message",
+  "description": "Observation buckets published by the device on pws/{device_id}/obs (QoS 1, not retained), every 15 minutes with jitter. Each message carries one or more buckets; each bucket carries the aggregated fields of every selected station. Delivery is at least once: the server dedupes on (device_id, seq) and on (station key, bucket start). Unknown top level keys are ignored by the server, so additionalProperties is permissive here.",
+  "type": "object",
+  "properties": {
+    "v": { "description": "Payload version, see common.schema.json#/$defs/version.", "$ref": "common.schema.json#/$defs/version" },
+    "device_id": { "description": "Publishing device. Must match the device_id in the topic.", "$ref": "common.schema.json#/$defs/device_id" },
+    "seq": {
+      "description": "Monotonic message sequence number per device, used for dedupe and gap detection. The server requests a resync when it sees a gap. Starts at 0 or 1 at the device's choice and never reuses a value within a firmware install.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "sent": { "description": "Time the message was handed to the MQTT client, UTC. May be much later than the bucket starts when the outbox is replaying.", "$ref": "common.schema.json#/$defs/timestamp" },
+    "interval_s": {
+      "description": "Length of each bucket in seconds, for example 300. All buckets in a message share this interval.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "buckets": {
+      "description": "Observation buckets in ascending start order. A replay sends at most 20 buckets per message; a message never exceeds 64 KB, so the device splits by bucket when needed.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/bucket" }
+    }
+  },
+  "required": ["v", "device_id", "seq", "sent", "interval_s", "buckets"],
+  "additionalProperties": true,
+  "$defs": {
+    "bucket": {
+      "description": "Aggregates for one time bucket of interval_s seconds starting at 'start'.",
+      "type": "object",
+      "properties": {
+        "start": { "description": "Bucket start, UTC, aligned to interval_s. Dedupe key together with the station key.", "$ref": "common.schema.json#/$defs/timestamp" },
+        "stations": {
+          "description": "One entry per station the user selected that produced at least one packet in this bucket. Stations never selected by the user are not sent.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/station" }
+        }
+      },
+      "required": ["start", "stations"],
+      "additionalProperties": true
+    },
+    "station": {
+      "description": "Aggregated readings from one station in one bucket.",
+      "type": "object",
+      "properties": {
+        "key": { "description": "Station key model:id:channel, see common.schema.json#/$defs/station_key.", "$ref": "common.schema.json#/$defs/station_key" },
+        "n": {
+          "description": "Number of decoded packets from this station that went into the bucket. 0 is allowed so the server can tell 'heard nothing' from 'not selected'.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "meta": { "$ref": "#/$defs/meta" },
+        "f": { "description": "Canonical fields, see common.schema.json#/$defs/fields.", "$ref": "common.schema.json#/$defs/fields" },
+        "sig": { "$ref": "#/$defs/signal" },
+        "raw": {
+          "description": "Decoder fields with no canonical mapping, passed through unconverted so every rtl_433 decoder works on day one. Keys are the decoder's own field names. The server stores this without interpreting it.",
+          "$ref": "common.schema.json#/$defs/passthrough"
+        }
+      },
+      "required": ["key", "n", "f"],
+      "additionalProperties": true
+    },
+    "meta": {
+      "description": "Site metadata the server needs to derive sea level pressure and 10 m wind. Sent with every station so a formula fix never needs a firmware update.",
+      "type": "object",
+      "properties": {
+        "alt_m": { "description": "Altitude of the pressure sensor above mean sea level in metres. Unbounded; the contract gives no range.", "type": "number" },
+        "wind_height_m": { "description": "Height of the anemometer above ground in metres. Unbounded; the contract gives no range.", "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "signal": {
+      "description": "Radio link quality for this station as reported by the SDR driver, averaged over the bucket.",
+      "type": "object",
+      "properties": {
+        "rssi_db": { "description": "Received signal strength in dB as reported by rtl_433 (relative to full scale, so normally negative). Unbounded; the scale is driver specific.", "type": "number" },
+        "snr_db": { "description": "Signal to noise ratio in dB. Unbounded; the scale is driver specific.", "type": "number" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

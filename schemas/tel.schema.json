@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.wxalerts.org/pws/v0/tel.schema.json",
+  "title": "PWS tel message",
+  "description": "Device health telemetry published on pws/{device_id}/tel (QoS 1, not retained) every 15 minutes. No IP addresses are sent. 'modem' and 'gps' are present only when that hardware is attached. Unknown keys at the top level and inside every sub-object are ignored by the server, so additionalProperties is permissive throughout.",
+  "type": "object",
+  "properties": {
+    "v": { "description": "Payload version, see common.schema.json#/$defs/version.", "$ref": "common.schema.json#/$defs/version" },
+    "device_id": { "description": "Publishing device. Must match the device_id in the topic.", "$ref": "common.schema.json#/$defs/device_id" },
+    "ts": { "description": "Time the telemetry was sampled, UTC.", "$ref": "common.schema.json#/$defs/timestamp" },
+    "fw": { "description": "Running firmware (pwsgw application) version.", "$ref": "common.schema.json#/$defs/version_string" },
+    "os": { "description": "Running OS image version. Optional because an unmanaged OS install may not have one.", "$ref": "common.schema.json#/$defs/version_string" },
+    "uptime_s": { "description": "Seconds since the device booted.", "type": "integer", "minimum": 0 },
+    "time": { "$ref": "#/$defs/time" },
+    "sys": { "$ref": "#/$defs/sys" },
+    "outbox": { "$ref": "#/$defs/outbox" },
+    "sdr": {
+      "description": "One entry per attached radio. Empty when no radio is detected (the device also raises an sdr_missing event).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/sdr" }
+    },
+    "net": { "$ref": "#/$defs/net" },
+    "modem": { "$ref": "#/$defs/modem" },
+    "gps": { "$ref": "#/$defs/gps" }
+  },
+  "required": ["v", "device_id", "ts", "fw", "uptime_s", "time", "sys", "outbox", "net"],
+  "additionalProperties": true,
+  "$defs": {
+    "time": {
+      "description": "Time synchronisation state. The device never uplinks observations until synced is true.",
+      "type": "object",
+      "properties": {
+        "src": { "description": "Current time source, for example ntp, gps or rtc. Not enumerated because the contract does not fix the list.", "type": "string", "minLength": 1 },
+        "offset_ms": { "description": "Last measured offset between the system clock and the source in milliseconds, signed.", "type": "number" },
+        "synced": { "description": "True when the clock is trusted and observations may be uplinked.", "type": "boolean" }
+      },
+      "required": ["src", "offset_ms", "synced"],
+      "additionalProperties": true
+    },
+    "sys": {
+      "description": "Board health. Every key is optional because not every board exposes every reading; the platform adapter fills what it can.",
+      "type": "object",
+      "properties": {
+        "cpu_temp_c": { "description": "SoC temperature in degrees Celsius.", "type": "number" },
+        "throttled": { "description": "Throttle flag bitmask as reported by the board (on a Raspberry Pi the vcgencmd get_throttled value). 0 means not throttled.", "type": "integer", "minimum": 0 },
+        "mem_free_mb": { "description": "Free memory in mebibytes.", "type": "number", "minimum": 0 },
+        "data_used_pct": { "description": "Share of the configured monthly data allowance used so far, percent. Only meaningful on metered links.", "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "outbox": {
+      "description": "State of the store and forward outbox used while the uplink is down.",
+      "type": "object",
+      "properties": {
+        "depth": { "description": "Number of messages waiting to be sent.", "type": "integer", "minimum": 0 },
+        "oldest_s": { "description": "Age of the oldest waiting message in seconds, 0 when the outbox is empty.", "type": "integer", "minimum": 0 }
+      },
+      "required": ["depth", "oldest_s"],
+      "additionalProperties": true
+    },
+    "sdr": {
+      "description": "One attached radio. radio_id and driver were added by the Nov 16 multiple radios draft change and are optional for backwards compatibility.",
+      "type": "object",
+      "properties": {
+        "radio_id": { "description": "Stable identifier of the radio on this device, for example the RTL-SDR serial. Lets the server tell radios apart when more than one is attached.", "type": "string", "minLength": 1 },
+        "driver": { "description": "Software driving the radio.", "type": "string", "enum": ["rtl_433", "davis", "capture"] },
+        "band_mhz": { "description": "Centre frequency the radio is tuned to in MHz, for example 433.92 or 915.", "type": "number", "minimum": 0 },
+        "decoders": { "description": "Number of protocol decoders enabled on this radio.", "type": "integer", "minimum": 0 },
+        "packets_15m": { "description": "Packets decoded in the last 15 minutes, all stations, selected or not.", "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "net": {
+      "description": "Uplink network summary. No addresses.",
+      "type": "object",
+      "properties": {
+        "link": { "description": "Active uplink type, for example lte, eth or wifi. Not enumerated because the contract does not fix the list.", "type": "string", "minLength": 1 }
+      },
+      "required": ["link"],
+      "additionalProperties": true
+    },
+    "modem": {
+      "description": "Cellular modem state. Present only when a modem is attached.",
+      "type": "object",
+      "properties": {
+        "carrier": { "description": "Operator name as reported by the modem.", "type": "string" },
+        "mcc_mnc": { "description": "Mobile country code and network code of the serving network, digits only.", "type": "string", "pattern": "^[0-9]{5,6}$" },
+        "reg": { "description": "Registration state, for example home, roaming, searching, denied. Not enumerated because modem firmware vocabularies differ.", "type": "string" },
+        "tech": { "description": "Radio access technology, for example lte, nr, umts. Not enumerated because modem firmware vocabularies differ.", "type": "string" },
+        "rssi_dbm": { "description": "Received signal strength in dBm.", "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "gps": {
+      "description": "GNSS receiver state. Present only when a receiver is attached. The exact position stays server side; the front end shows a fuzzed location.",
+      "type": "object",
+      "properties": {
+        "fix": { "description": "Fix type: 0 none, 2 two dimensional, 3 three dimensional.", "type": "integer", "minimum": 0 },
+        "sats": { "description": "Satellites used in the fix.", "type": "integer", "minimum": 0 },
+        "lat": { "description": "Latitude in decimal degrees, WGS 84.", "type": "number", "minimum": -90, "maximum": 90 },
+        "lon": { "description": "Longitude in decimal degrees, WGS 84.", "type": "number", "minimum": -180, "maximum": 180 },
+        "alt_m": { "description": "Altitude above mean sea level in metres.", "type": "number" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

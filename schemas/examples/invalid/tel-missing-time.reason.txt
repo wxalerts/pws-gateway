@@ -1,0 +1,1 @@
+time is required; the server needs to know whether the device clock is synced.
