@@ -1,44 +1,46 @@
 # Dependabot keeps the Go module graph, the web lockfile, the pinned action
-# SHAs and the container base images current. Minor and patch updates are
-# grouped into one pull request per ecosystem per week so review stays
-# manageable; major updates arrive one at a time.
+# SHAs and the container base images current. Every update for an ecosystem,
+# majors included, lands in ONE pull request per ecosystem, at most monthly,
+# so the maintainer sees four pull requests a month at the most instead of a
+# notification per package. A major that breaks the build is fixed in that
+# same pull request rather than argued about across several.
 
 version: 2
 updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
+    open-pull-requests-limit: 1
     groups:
-      go-minor-patch:
-        update-types: [minor, patch]
+      go-all:
+        patterns: ["*"]
 
   - package-ecosystem: npm
     directory: /web
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
+    open-pull-requests-limit: 1
     groups:
-      npm-minor-patch:
-        update-types: [minor, patch]
+      npm-all:
+        patterns: ["*"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
+    open-pull-requests-limit: 1
     groups:
-      actions-minor-patch:
-        update-types: [minor, patch]
+      actions-all:
+        patterns: ["*"]
 
   - package-ecosystem: docker
     directories:
       - /deploy
       - /deploy/rtl433
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
+    open-pull-requests-limit: 1
     groups:
-      docker-minor-patch:
-        update-types: [minor, patch]
+      docker-all:
+        patterns: ["*"]
