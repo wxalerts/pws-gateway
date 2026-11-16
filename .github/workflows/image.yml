@@ -1,0 +1,95 @@
+# SD card image build (manual, placeholder).
+#
+# The end goal is a pi-gen based image that a station owner flashes and boots
+# with no further Linux work: the gateway, rtl_433, the udev rules and the
+# modprobe blacklist from deploy/ preinstalled, first boot handled by the web
+# UI.
+#
+# Why this stays workflow_dispatch only for now
+# ---------------------------------------------
+# The update design calls for A/B root partitions with automatic rollback:
+# the gateway writes the new release to the inactive slot, asks the firmware
+# to try it once, and the slot is only made permanent after the new system
+# reports healthy. On Pi 4 and Pi 5 that is the "tryboot" mechanism
+# (reboot "0 tryboot" plus tryboot.txt / autoboot.txt). Whether tryboot works
+# on the Pi 3B+ with its older bootcode.bin is unverified. Until a 3B+ has
+# been tested, the partition layout of the image is an open question, and
+# building images automatically on every tag would publish a layout we may
+# have to break. The decision will be recorded under docs/adr/ when it is
+# made. Meanwhile the containers and bundles from release.yml are the
+# supported install path.
+#
+# What runs today
+# ---------------
+# A validation step over the deploy/ files that the image will bake in, so
+# the workflow is syntactically exercised and the inputs it will need already
+# have to be present and well formed.
+
+name: SD image
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or commit to build the image from"
+        required: true
+        default: main
+      board:
+        description: "Target board (informational until pi-gen lands)"
+        required: true
+        default: pi4
+        type: choice
+        options: [pi3bplus, pi4, pi5]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate image inputs
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Check deploy files the image will include
+        run: |
+          set -euo pipefail
+          for f in deploy/systemd/pwsgw.service deploy/udev/99-rtl-sdr.rules deploy/modprobe.d/blacklist-rtl-dvb.conf deploy/docker-compose.yml; do
+            [ -f "$f" ] || { echo "missing $f" >&2; exit 1; }
+            echo "ok $f"
+          done
+          grep -q '^blacklist dvb_usb_rtl28xxu' deploy/modprobe.d/blacklist-rtl-dvb.conf
+          grep -q 'ProtectSystem=strict' deploy/systemd/pwsgw.service
+          docker compose -f deploy/docker-compose.yml config --quiet
+
+      - name: Summary
+        env:
+          BOARD: ${{ inputs.board }}
+          REF: ${{ inputs.ref }}
+        run: |
+          {
+            echo "## SD image (placeholder)"
+            echo "Validated deploy/ inputs for board '${BOARD}' at ref '${REF}'."
+            echo "No image was built. The pi-gen stage is blocked on the A/B boot question described at the top of .github/workflows/image.yml."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # PLACEHOLDER: pi-gen build.
+  #
+  # When the A/B layout is decided this job will:
+  #   1. check out the pinned pi-gen release and this repository's
+  #      deploy/pi-gen/ stage directory,
+  #   2. run pi-gen in its container mode on ubuntu-24.04-arm (native arm64
+  #      avoids the slow qemu path for the chroot stages),
+  #   3. produce the .img.xz, its sha256 and a manifest entry,
+  #   4. upload the image as a workflow artifact for manual testing.
+  # Publishing an image to object storage goes through the same sign and
+  # publish gates as release.yml.
+  #
+  # build-image:
+  #   name: Build image (pi-gen)
+  #   needs: validate
+  #   runs-on: ubuntu-24.04-arm
+  #   steps: []
