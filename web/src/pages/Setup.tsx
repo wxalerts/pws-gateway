@@ -7,6 +7,8 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { TextField } from '../components/fields';
 
+export const MIN_PASSWORD_LENGTH = 12;
+
 export function SetupPage() {
   const { status, completeSetup } = useAuth();
   const navigate = useNavigate();
@@ -23,10 +25,17 @@ export function SetupPage() {
   if (status === 'signed_in') return <Navigate to="/" replace />;
   if (status === 'signed_out') return <Navigate to="/login" replace />;
 
-  const tooShort = password.length > 0 && password.length < 8;
+  // Must match auth.MinPasswordLength on the server, which rejects anything
+  // shorter with weak_password. Counted in code points there, so use the
+  // spread length here rather than UTF-16 units.
+  const passwordLength = [...password].length;
+  const tooShort = passwordLength > 0 && passwordLength < MIN_PASSWORD_LENGTH;
   const mismatch = confirm.length > 0 && confirm !== password;
   const canSubmit =
-    username.trim().length > 0 && password.length >= 8 && confirm === password && !busy;
+    username.trim().length > 0 &&
+    passwordLength >= MIN_PASSWORD_LENGTH &&
+    confirm === password &&
+    !busy;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -64,8 +73,8 @@ export function SetupPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
-            hint="At least 8 characters. Pick something you do not use anywhere else."
-            error={tooShort ? 'Needs at least 8 characters.' : undefined}
+            hint={`At least ${MIN_PASSWORD_LENGTH} characters. Pick something you do not use anywhere else.`}
+            error={tooShort ? `Needs at least ${MIN_PASSWORD_LENGTH} characters.` : undefined}
             required
           />
           <TextField

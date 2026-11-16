@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/wxalerts/pws-gateway/internal/auth"
@@ -34,7 +35,7 @@ func (s *Server) handleSetupCreate(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, auth.ErrUsernameInvalid):
 			writeErr(w, http.StatusBadRequest, "invalid_username", err.Error())
 		case errors.Is(err, auth.ErrPasswordShort), errors.Is(err, auth.ErrPasswordLong), errors.Is(err, auth.ErrPasswordInvalid):
-			writeErr(w, http.StatusBadRequest, "weak_password", err.Error())
+			writeErr(w, http.StatusBadRequest, "weak_password", userFacing(err))
 		default:
 			s.log.Error("web: create account", "err", err)
 			writeErr(w, http.StatusInternalServerError, "internal", "could not save the account")
@@ -147,7 +148,7 @@ func (s *Server) handlePassword(w http.ResponseWriter, r *http.Request) {
 	if err := s.opts.Auth.SetPassword(user, in.New); err != nil {
 		switch {
 		case errors.Is(err, auth.ErrPasswordShort), errors.Is(err, auth.ErrPasswordLong), errors.Is(err, auth.ErrPasswordInvalid):
-			writeErr(w, http.StatusBadRequest, "weak_password", err.Error())
+			writeErr(w, http.StatusBadRequest, "weak_password", userFacing(err))
 		default:
 			s.log.Error("web: set password", "err", err)
 			writeErr(w, http.StatusInternalServerError, "internal", "could not save the password")
@@ -164,4 +165,10 @@ func (s *Server) handlePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	s.opts.Auditor.PasswordChanged(user, addr)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// userFacing strips the Go package prefix from an auth error so the detail
+// shown in the browser reads as a sentence rather than as a log line.
+func userFacing(err error) string {
+	return strings.TrimPrefix(err.Error(), "auth: ")
 }
