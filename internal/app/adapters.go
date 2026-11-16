@@ -39,6 +39,7 @@ func (s stationSource) Stations(context.Context) ([]web.StationInfo, error) {
 			// rather than raising a false low battery warning.
 			BatteryOK:  st.BatteryOK == nil || *st.BatteryOK,
 			Fields:     st.Fields,
+			RawFields:  st.RawFields,
 			NSightings: st.Sightings,
 		})
 	}

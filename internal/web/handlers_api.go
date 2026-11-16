@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wxalerts/pws-gateway/internal/collector/mapping"
 	"github.com/wxalerts/pws-gateway/internal/config"
 	"github.com/wxalerts/pws-gateway/internal/platform"
 )
@@ -65,35 +66,55 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 // ---- stations -------------------------------------------------------------
 
 type stationView struct {
-	Key         string   `json:"key"`
-	Model       string   `json:"model"`
-	ID          int      `json:"id"`
-	Channel     *int     `json:"channel"`
-	LastSeen    string   `json:"last_seen"`
-	RSSIdB      float64  `json:"rssi_db"`
-	SNRdB       float64  `json:"snr_db"`
-	BatteryOK   bool     `json:"battery_ok"`
-	Fields      []string `json:"fields"`
-	NSightings  int      `json:"n_sightings"`
-	Selected    bool     `json:"selected"`
-	Name        string   `json:"name"`
-	AltM        *float64 `json:"alt_m"`
-	WindHeightM *float64 `json:"wind_height_m"`
+	Key       string  `json:"key"`
+	Model     string  `json:"model"`
+	ID        int     `json:"id"`
+	Channel   *int    `json:"channel"`
+	LastSeen  string  `json:"last_seen"`
+	RSSIdB    float64 `json:"rssi_db"`
+	SNRdB     float64 `json:"snr_db"`
+	BatteryOK bool    `json:"battery_ok"`
+	// Fields is the effective selected set: the model default with the
+	// owner's overrides applied (config.Station.EffectiveFields). For a
+	// station that is not selected it shows what would be used if it were.
+	Fields []string `json:"fields"`
+	// FieldsAvailable is every canonical field the station has reported and
+	// RawFields the unmapped decoder names seen.
+	FieldsAvailable []string `json:"fields_available"`
+	RawFields       []string `json:"raw_fields"`
+	// FieldsDefault is the model default for the fields seen.
+	FieldsDefault []string `json:"fields_default"`
+	IncludeRaw    bool     `json:"include_raw"`
+	NSightings    int      `json:"n_sightings"`
+	Selected      bool     `json:"selected"`
+	Name          string   `json:"name"`
+	AltM          *float64 `json:"alt_m"`
+	WindHeightM   *float64 `json:"wind_height_m"`
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return append([]string(nil), s...)
 }
 
 func mergeStation(info StationInfo, cfg map[string]config.Station) stationView {
 	v := stationView{
 		Key: info.Key, Model: info.Model, ID: info.ID, Channel: info.Channel,
 		LastSeen: info.LastSeen.UTC().Format(time.RFC3339), RSSIdB: info.RSSIdB, SNRdB: info.SNRdB,
-		BatteryOK: info.BatteryOK, Fields: info.Fields, NSightings: info.NSightings,
+		BatteryOK: info.BatteryOK, NSightings: info.NSightings,
 	}
-	if v.Fields == nil {
-		v.Fields = []string{}
-	}
-	if c, ok := cfg[info.Key]; ok {
+	v.FieldsAvailable = nonNil(info.Fields)
+	v.RawFields = nonNil(info.RawFields)
+	v.FieldsDefault = mapping.DefaultFields(info.Model, info.Fields)
+	c, ok := cfg[info.Key]
+	if ok {
 		v.Selected, v.Name = c.Selected, c.Name
 		v.AltM, v.WindHeightM = &c.AltM, &c.WindHeightM
 	}
+	v.Fields = c.EffectiveFields(v.FieldsDefault)
+	v.IncludeRaw = c.RawIncluded()
 	return v
 }
 
@@ -128,6 +149,57 @@ func (n *nullableFloat) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, &n.val)
 }
 
+// selectionPatch is the field selection part of PUT /api/stations/{key}.
+type selectionPatch struct {
+	fields      map[string]bool
+	clearFields bool
+	rawSet      bool
+	raw         *bool
+}
+
+// parseSelectionPatch decodes the fields and include_raw members. It writes
+// the 400 response itself and returns false on a malformed value.
+func parseSelectionPatch(w http.ResponseWriter, fields, includeRaw json.RawMessage) (selectionPatch, bool) {
+	var p selectionPatch
+	if fields != nil {
+		if string(fields) == "null" {
+			p.clearFields = true
+		} else if err := json.Unmarshal(fields, &p.fields); err != nil {
+			writeErr(w, http.StatusBadRequest, "bad_request", "fields must be an object of field name to true or false")
+			return p, false
+		}
+	}
+	if includeRaw != nil {
+		if err := json.Unmarshal(includeRaw, &p.raw); err != nil {
+			writeErr(w, http.StatusBadRequest, "bad_request", "include_raw must be true, false or null")
+			return p, false
+		}
+		p.rawSet = true
+	}
+	return p, true
+}
+
+// apply merges the patch into st: field overrides are merged key by key, null
+// fields clears them, and include_raw null returns to the default rule.
+func (p selectionPatch) apply(st *config.Station) {
+	if p.clearFields {
+		st.Fields = nil
+	}
+	if len(p.fields) > 0 {
+		merged := make(map[string]bool, len(st.Fields)+len(p.fields))
+		for k, v := range st.Fields {
+			merged[k] = v
+		}
+		for k, v := range p.fields {
+			merged[k] = v
+		}
+		st.Fields = merged
+	}
+	if p.rawSet {
+		st.IncludeRaw = p.raw
+	}
+}
+
 func (s *Server) handleStationPut(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
 	var in struct {
@@ -135,6 +207,11 @@ func (s *Server) handleStationPut(w http.ResponseWriter, r *http.Request) {
 		Name        *string       `json:"name"`
 		AltM        nullableFloat `json:"alt_m"`
 		WindHeightM nullableFloat `json:"wind_height_m"`
+		// Fields is a partial object of canonical name to bool merged into
+		// the station's overrides; null clears every override (back to the
+		// model default). IncludeRaw null returns to the default rule.
+		Fields     json.RawMessage `json:"fields"`
+		IncludeRaw json.RawMessage `json:"include_raw"`
 	}
 	if !decodeBody(w, r, &in) {
 		return
@@ -150,6 +227,10 @@ func (s *Server) handleStationPut(w http.ResponseWriter, r *http.Request) {
 			info = &infos[i]
 		}
 	}
+	patch, ok := parseSelectionPatch(w, in.Fields, in.IncludeRaw)
+	if !ok {
+		return
+	}
 	_, configured := s.opts.Config.Get().Stations[key]
 	if info == nil && !configured {
 		writeErr(w, http.StatusNotFound, "not_found", "no station with key "+key)
@@ -160,6 +241,7 @@ func (s *Server) handleStationPut(w http.ResponseWriter, r *http.Request) {
 		if in.Selected != nil {
 			st.Selected = *in.Selected
 		}
+		patch.apply(&st)
 		if in.Name != nil {
 			st.Name = *in.Name
 		}

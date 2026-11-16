@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -385,6 +386,72 @@ func TestStationsMergeAndPut(t *testing.T) {
 	}
 	if r := e.do("PUT", "/api/stations/Fine/2", `{"wind_height_m":500}`, c); r.Code != 422 {
 		t.Fatalf("invalid height: %d %s", r.Code, r.Body)
+	}
+}
+
+func TestStationFieldSelectionAPI(t *testing.T) {
+	e := newEnv(t, nil,
+		StationInfo{Key: "Acurite-609TXC:224:", Model: "Acurite-609TXC", ID: 224, LastSeen: time.Unix(0, 0),
+			Fields: []string{"temp_c", "humidity_pct", "battery_ok"}, RawFields: []string{"status", "mic"}},
+	)
+	c := e.login()
+	const path = "/api/stations/Acurite-609TXC:224:"
+	var list []map[string]any
+	e.do("GET", "/api/stations", "", c).json(&list)
+	row := list[0]
+	strs := func(v any) []string {
+		var out []string
+		for _, x := range v.([]any) {
+			out = append(out, x.(string))
+		}
+		return out
+	}
+	if got := strs(row["fields"]); !slices.Equal(got, []string{"temp_c", "humidity_pct"}) {
+		t.Fatalf("fields = %v", got)
+	}
+	if got := strs(row["fields_available"]); !slices.Equal(got, []string{"temp_c", "humidity_pct", "battery_ok"}) {
+		t.Fatalf("available = %v", got)
+	}
+	if !slices.Equal(strs(row["fields_default"]), strs(row["fields"])) || !slices.Equal(strs(row["raw_fields"]), []string{"status", "mic"}) || row["include_raw"] != false {
+		t.Fatalf("row = %v", row)
+	}
+
+	// Selecting ticks the defaults and turns raw on without any overrides.
+	if r := e.do("PUT", path, `{"selected":true}`, c); r.Code != 200 {
+		t.Fatalf("select: %d %s", r.Code, r.Body)
+	}
+	st := e.cfg.Get().Stations["Acurite-609TXC:224:"]
+	if st.Fields != nil || !st.RawIncluded() {
+		t.Fatalf("after select: %+v", st)
+	}
+
+	// Partial update: drop humidity, add battery.
+	var got map[string]any
+	r := e.do("PUT", path, `{"fields":{"humidity_pct":false,"battery_ok":true},"include_raw":false}`, c)
+	if r.Code != 200 {
+		t.Fatalf("fields put: %d %s", r.Code, r.Body)
+	}
+	r.json(&got)
+	if f := strs(got["fields"]); !slices.Equal(f, []string{"temp_c", "battery_ok"}) || got["include_raw"] != false {
+		t.Fatalf("put response = %v", got)
+	}
+	// A second partial update keeps the first one's overrides.
+	e.do("PUT", path, `{"fields":{"temp_c":false}}`, c)
+	st = e.cfg.Get().Stations["Acurite-609TXC:224:"]
+	if st.Fields["humidity_pct"] || !st.Fields["battery_ok"] || st.Fields["temp_c"] {
+		t.Fatalf("merge lost overrides: %+v", st.Fields)
+	}
+	// null resets to the model default and the default raw rule.
+	e.do("PUT", path, `{"fields":null,"include_raw":null}`, c)
+	st = e.cfg.Get().Stations["Acurite-609TXC:224:"]
+	if st.Fields != nil || st.IncludeRaw != nil {
+		t.Fatalf("reset: %+v", st)
+	}
+	if r := e.do("PUT", path, `{"fields":{"nonsense":true}}`, c); r.Code != 422 {
+		t.Fatalf("unknown field: %d %s", r.Code, r.Body)
+	}
+	if r := e.do("PUT", path, `{"fields":["temp_c"]}`, c); r.Code != 400 {
+		t.Fatalf("bad shape: %d", r.Code)
 	}
 }
 
