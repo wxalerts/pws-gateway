@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.wxalerts.org/pws/v0/event.schema.json",
+  "title": "PWS event message",
+  "description": "Immediate event published on pws/{device_id}/event (QoS 1, not retained) when something happens that should not wait for the next telemetry cycle. Unknown keys are ignored by the server.",
+  "type": "object",
+  "properties": {
+    "v": { "description": "Payload version, see common.schema.json#/$defs/version.", "$ref": "common.schema.json#/$defs/version" },
+    "device_id": { "description": "Publishing device. Optional; the contract example omits it and the topic already carries it.", "$ref": "common.schema.json#/$defs/device_id" },
+    "ts": { "description": "Time the event occurred, UTC.", "$ref": "common.schema.json#/$defs/timestamp" },
+    "type": {
+      "description": "Event type (v1 list). time_unsynced: clock lost trust, uplink of observations paused. sensor_lost / sensor_found: a selected station stopped or resumed being heard. update_failed: an update attempt failed (see the update message for detail). rollback: the bootloader returned to the previous version. sdr_missing: no radio detected. outbox_overflow: the outbox hit its cap and dropped data.",
+      "type": "string",
+      "enum": ["time_unsynced", "sensor_lost", "sensor_found", "update_failed", "rollback", "sdr_missing", "outbox_overflow"]
+    },
+    "detail": {
+      "description": "Type specific detail, an object the contract leaves open. Suggested keys: 'key' (station key) for sensor_lost and sensor_found, 'error' for update_failed, 'dropped' for outbox_overflow. Empty object when there is nothing to add.",
+      "$ref": "common.schema.json#/$defs/passthrough"
+    }
+  },
+  "required": ["v", "ts", "type"],
+  "additionalProperties": true
+}

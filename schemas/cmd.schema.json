@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.wxalerts.org/pws/v0/cmd.schema.json",
+  "title": "PWS cmd message",
+  "description": "Command sent by the server on pws/{device_id}/cmd/{type} (QoS 1, not retained). Every command is signed: 'sig' is an Ed25519 signature over the RFC 8785 canonical JSON of the object {id, type, device_id, exp, body}. The device pins the command signing public key (separate from the release signing key), checks that device_id matches its own, that exp is in the future and that id has not been seen before, then acks on pws/{device_id}/ack/{id}. There is no shell command and no install command. Unknown top level keys are accepted but they are not covered by the signature, so the device must not act on them.",
+  "type": "object",
+  "properties": {
+    "id": { "description": "Command identifier, unique per device for the life of the replay cache. Also the ack topic suffix.", "$ref": "common.schema.json#/$defs/command_id" },
+    "type": {
+      "description": "Command type. Must equal the {type} segment of the topic. config: apply a configuration patch with the same commit-confirm safety as the web UI. reboot: reboot the device. bundle: upload a diagnostic bundle. update-check: check the signed manifest for an update now. resync: re-send observation buckets for a time range. diag: run one allow-listed diagnostic action. capture: raw radio capture, reserved for v2 and rejected by v1 devices.",
+      "type": "string",
+      "enum": ["config", "reboot", "bundle", "update-check", "resync", "diag", "capture"]
+    },
+    "device_id": { "description": "Target device. The device rejects a command whose device_id differs from its own even if the signature is valid, which stops a signed command for one device being replayed to another.", "$ref": "common.schema.json#/$defs/device_id" },
+    "exp": { "description": "Expiry, UTC. The device ignores a command received after this instant and sends no ack.", "$ref": "common.schema.json#/$defs/timestamp" },
+    "body": {
+      "description": "Type specific parameters. Always an object, empty when the type takes none. The body schema per type is applied below; every body accepts unknown keys so parameters can be added without a version bump.",
+      "type": "object"
+    },
+    "sig": { "description": "Signature over the canonical JSON of {id, type, device_id, exp, body}, see common.schema.json#/$defs/signature.", "$ref": "common.schema.json#/$defs/signature" }
+  },
+  "required": ["id", "type", "device_id", "exp", "body", "sig"],
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "resync" } }, "required": ["type"] },
+      "then": { "properties": { "body": { "$ref": "#/$defs/resync_body" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "diag" } }, "required": ["type"] },
+      "then": { "properties": { "body": { "$ref": "#/$defs/diag_body" } } }
+    },
+    {
+      "if": { "properties": { "type": { "const": "config" } }, "required": ["type"] },
+      "then": { "properties": { "body": { "$ref": "#/$defs/config_body" } } }
+    }
+  ],
+  "$defs": {
+    "config_body": {
+      "description": "Configuration patch. The keys mirror the device configuration file and are owned by the device configuration spec, not by this schema, so the object is left open here. The device applies it with commit-confirm: if the device does not reconnect within the confirm window the previous configuration is restored.",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "resync_body": {
+      "description": "Range of observation buckets to re-send from local history. The server derives the range from the seq and bucket start gaps it observed.",
+      "type": "object",
+      "properties": {
+        "from": { "description": "Earliest bucket start to re-send, inclusive, UTC.", "$ref": "common.schema.json#/$defs/timestamp" },
+        "to": { "description": "Latest bucket start to re-send, inclusive, UTC. Defaults to now when omitted.", "$ref": "common.schema.json#/$defs/timestamp" }
+      },
+      "required": ["from"],
+      "additionalProperties": true
+    },
+    "diag_body": {
+      "description": "One allow-listed diagnostic action. The allow list is fixed by the contract: restart a service, re-run discovery, connectivity test, clear outbox. Anything else is rejected before it reaches the platform layer.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "description": "Action to run. restart_service: restart the named managed service (see 'service'). rediscover: re-run station discovery. connectivity_test: test broker and manifest reachability and report in the ack result. clear_outbox: drop the outbox contents.",
+          "type": "string",
+          "enum": ["restart_service", "rediscover", "connectivity_test", "clear_outbox"]
+        },
+        "service": { "description": "Service name for restart_service, one of the services the device manages (for example rtl_433). Ignored for other actions.", "type": "string", "minLength": 1 }
+      },
+      "required": ["action"],
+      "additionalProperties": true
+    }
+  }
+}

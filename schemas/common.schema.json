@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.wxalerts.org/pws/v0/common.schema.json",
+  "title": "PWS MQTT contract: shared definitions",
+  "description": "Definitions shared by every message schema in the WxAlerts PWS MQTT contract (v0 draft). Message schemas reference these through $ref so a rule such as the timestamp format or the station key pattern is written down once.",
+  "$defs": {
+    "version": {
+      "description": "Payload version. 0 while the contract is in draft. The server accepts v and v-1, so the enum lists every version the current server accepts. Additive changes (new optional fields) never bump v; only a breaking change does.",
+      "type": "integer",
+      "enum": [0]
+    },
+    "device_id": {
+      "description": "Device identifier, the same value that appears in the topic prefix pws/{device_id}/. The pattern keeps it safe for MQTT topics: no '/', '+' or '#', no whitespace, 1 to 64 characters of ASCII letters, digits, underscore or hyphen. The contract page only shows the example d_8f3a; this pattern is an interpretation recorded in schemas/README.md.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+    },
+    "station_key": {
+      "description": "Station key in the form model:id:channel, for example Acurite-5n1:1234:A. Davis stations use davis:{model}:{tx_id}. The first segment is the decoder model name (letters, digits, '_', '.', '-'), the second is the sensor id and must be non-empty, the third is the channel and may be empty for protocols without channels (the key then ends with ':'). A re-pair maps a new key to the same station on the server.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*:[^:]+:[^:]*$"
+    },
+    "timestamp": {
+      "description": "UTC timestamp in RFC 3339 format with the 'Z' designator, for example 2026-11-16T14:15:03Z. Fractional seconds are allowed. Numeric offsets are rejected because the contract says all timestamps are UTC and a single spelling keeps dedupe keys comparable as strings.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$"
+    },
+    "command_id": {
+      "description": "Command identifier chosen by the server, for example c_01. It becomes the last topic segment of ack/{cmd_id}, so it is limited to topic-safe characters, 1 to 128 of them. Also used as the key of the device replay cache.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "version_string": {
+      "description": "Firmware or OS version string as published by the release manifest, for example 0.1.0. Not constrained to semver because the contract does not require it; compare versions with the manifest, not by string ordering.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "signature": {
+      "description": "Ed25519 signature (64 bytes) encoded as standard base64 with padding (RFC 4648 section 4), 88 characters. The signed message is the RFC 8785 canonical JSON of {id, type, device_id, exp, body}. The contract does not name an encoding; base64 standard is this schema's choice and is listed as a proposed contract change in schemas/README.md.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]{86}==$"
+    },
+    "gauge": {
+      "description": "Gauge field aggregated over the bucket: avg, min and max of the samples. At least one statistic must be present and no other keys are allowed. Values are unbounded because the contract gives no range and sensor limits differ by model.",
+      "type": "object",
+      "properties": {
+        "avg": { "description": "Arithmetic mean of the samples in the bucket, SI unit of the field.", "type": "number" },
+        "min": { "description": "Smallest sample in the bucket, SI unit of the field.", "type": "number" },
+        "max": { "description": "Largest sample in the bucket, SI unit of the field.", "type": "number" }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    },
+    "direction": {
+      "description": "Direction field: vector mean of the samples in compass degrees, 0 inclusive to 360 exclusive. Only 'vec' is allowed.",
+      "type": "object",
+      "properties": {
+        "vec": { "description": "Vector mean direction in degrees clockwise from true north. 0 <= vec < 360.", "type": "number", "minimum": 0, "exclusiveMaximum": 360 }
+      },
+      "required": ["vec"],
+      "additionalProperties": false
+    },
+    "counter": {
+      "description": "Counter delta field: the sum of increments during the bucket after the device has handled counter resets. Only 'sum' is allowed. Unbounded because the contract gives no range; the device is responsible for reset handling.",
+      "type": "object",
+      "properties": {
+        "sum": { "description": "Total increment during the bucket, SI unit of the field (for example mm of rain or number of strikes).", "type": "number" }
+      },
+      "required": ["sum"],
+      "additionalProperties": false
+    },
+    "flag": {
+      "description": "Flag field: the last value seen in the bucket, 1 for true and 0 for false. Only 'last' is allowed.",
+      "type": "object",
+      "properties": {
+        "last": { "description": "Last sampled value, 1 (true) or 0 (false).", "type": "integer", "enum": [0, 1] }
+      },
+      "required": ["last"],
+      "additionalProperties": false
+    },
+    "field_value": {
+      "description": "Any one of the four field types. Used for canonical fields added after this schema was written, so a newer device does not fail validation on an older server (the additive rule). The value must still be a well formed field object.",
+      "oneOf": [
+        { "$ref": "#/$defs/gauge" },
+        { "$ref": "#/$defs/direction" },
+        { "$ref": "#/$defs/counter" },
+        { "$ref": "#/$defs/flag" }
+      ]
+    },
+    "canonical_field": {
+      "description": "Names of the canonical v1 observation fields. The list is final once the first sensor test matrix is done (open item on the contract page).",
+      "type": "string",
+      "enum": [
+        "temp_c",
+        "humidity_pct",
+        "pressure_station_hpa",
+        "wind_speed_ms",
+        "wind_gust_ms",
+        "wind_dir_deg",
+        "rain_mm",
+        "uv_index",
+        "light_lux",
+        "solar_wm2",
+        "lightning_count",
+        "lightning_km",
+        "battery_ok"
+      ]
+    },
+    "fields": {
+      "description": "Canonical fields for one station in one bucket, keyed by canonical field name. Each known name has a fixed field type. Unknown names are accepted when their value is a well formed field object (additive rule); fields with no canonical mapping belong under 'raw', not here.",
+      "type": "object",
+      "properties": {
+        "temp_c": { "description": "Air temperature in degrees Celsius. Gauge.", "$ref": "#/$defs/gauge" },
+        "humidity_pct": { "description": "Relative humidity in percent. Gauge.", "$ref": "#/$defs/gauge" },
+        "pressure_station_hpa": { "description": "Station (not sea level) pressure in hectopascal. The server reduces to sea level using meta.alt_m. Gauge.", "$ref": "#/$defs/gauge" },
+        "wind_speed_ms": { "description": "Wind speed in metres per second at meta.wind_height_m. The server adjusts to 10 m. Gauge.", "$ref": "#/$defs/gauge" },
+        "wind_gust_ms": { "description": "Wind gust in metres per second at meta.wind_height_m. Gauge; usually only 'max' is meaningful.", "$ref": "#/$defs/gauge" },
+        "wind_dir_deg": { "description": "Wind direction, vector mean in degrees from true north. Direction.", "$ref": "#/$defs/direction" },
+        "rain_mm": { "description": "Rainfall during the bucket in millimetres. Counter delta.", "$ref": "#/$defs/counter" },
+        "uv_index": { "description": "UV index, dimensionless. Gauge.", "$ref": "#/$defs/gauge" },
+        "light_lux": { "description": "Illuminance in lux. Gauge.", "$ref": "#/$defs/gauge" },
+        "solar_wm2": { "description": "Solar irradiance in watts per square metre. Gauge.", "$ref": "#/$defs/gauge" },
+        "lightning_count": { "description": "Lightning strikes detected during the bucket. Counter delta.", "$ref": "#/$defs/counter" },
+        "lightning_km": { "description": "Estimated distance to the most recent strike in kilometres. Gauge.", "$ref": "#/$defs/gauge" },
+        "battery_ok": { "description": "Battery state reported by the sensor, 1 ok, 0 low. Flag.", "$ref": "#/$defs/flag" }
+      },
+      "additionalProperties": { "$ref": "#/$defs/field_value" }
+    },
+    "passthrough": {
+      "description": "Opaque JSON object the contract does not define. The server stores or forwards it without interpreting it.",
+      "type": "object"
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "v": 0,
+  "device_id": "pi-garden-01",
+  "seq": 0,
+  "sent": "2026-11-16T14:45:00Z",
+  "interval_s": 900,
+  "x_future_top_level": "ignored by the server under the additive rule",
+  "buckets": [
+    {
+      "start": "2026-11-16T14:30:00Z",
+      "stations": [
+        {
+          "key": "Oregon-THGR122N:42:1",
+          "n": 0,
+          "f": {}
+        },
+        {
+          "key": "LaCrosse-TX141THBv2:9:2",
+          "n": 15,
+          "f": {
+            "temp_c": { "avg": -3.5, "min": -4.0, "max": -3.1 },
+            "humidity_pct": { "avg": 91 },
+            "x_dewpoint_c": { "avg": -4.8 }
+          }
+        }
+      ]
+    }
+  ]
+}

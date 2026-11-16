@@ -1,0 +1,7 @@
+{
+  "v": 0,
+  "device_id": "d_8f3a",
+  "ts": "2026-11-16T14:20:00Z",
+  "type": "sensor_lost",
+  "detail": { "key": "Acurite-5n1:1234:A", "last_seen": "2026-11-16T13:50:12Z" }
+}

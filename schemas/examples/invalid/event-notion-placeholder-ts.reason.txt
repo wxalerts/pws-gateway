@@ -1,0 +1,1 @@
+This is the contract page example verbatim. Its ts is the placeholder '...' rather than an RFC 3339 UTC timestamp.

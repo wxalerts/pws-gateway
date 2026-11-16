@@ -1,0 +1,8 @@
+{
+  "id": "c_05",
+  "type": "update-check",
+  "device_id": "pi-garden-01",
+  "exp": "2026-11-16T15:05:00Z",
+  "body": {},
+  "sig": "EifoHrUzTAhOdzIsmvzh1VRKGqZd10wCXkqh/2KNpIQYiGSg3ySHumkcPgGeQLLXZaFMbVvWnKExmlkSxvQaAA=="
+}

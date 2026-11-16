@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.wxalerts.org/pws/v0/ack.schema.json",
+  "title": "PWS ack message",
+  "description": "Command result published by the device on pws/{device_id}/ack/{cmd_id} (QoS 1, not retained) after it has processed a command. Expired commands, bad signatures, device_id mismatches and replays are dropped silently and never acked, so an ack always refers to a command the device accepted as authentic. The contract page only names the topic; the payload shape here is a proposal recorded in schemas/README.md. Unknown keys are ignored by the server.",
+  "type": "object",
+  "properties": {
+    "v": { "description": "Payload version, see common.schema.json#/$defs/version.", "$ref": "common.schema.json#/$defs/version" },
+    "id": { "description": "Identifier of the command being acknowledged. Equals the {cmd_id} topic segment.", "$ref": "common.schema.json#/$defs/command_id" },
+    "device_id": { "description": "Publishing device. Optional; the topic already carries it.", "$ref": "common.schema.json#/$defs/device_id" },
+    "type": { "description": "Type of the command being acknowledged, copied from the command so the server can route the ack without a lookup.", "type": "string", "enum": ["config", "reboot", "bundle", "update-check", "resync", "diag", "capture"] },
+    "ok": { "description": "True when the command was carried out (or, for config, staged and awaiting confirm). False when it was understood but could not be carried out; 'error' then says why.", "type": "boolean" },
+    "error": {
+      "description": "Human readable failure reason when ok is false. Null or absent when ok is true.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "result": {
+      "description": "Type specific result, for example the connectivity_test report for diag or the number of buckets queued for resync. Left open by the contract.",
+      "$ref": "common.schema.json#/$defs/passthrough"
+    },
+    "ts": { "description": "Time the ack was produced, UTC.", "$ref": "common.schema.json#/$defs/timestamp" }
+  },
+  "required": ["v", "id", "ok", "ts"],
+  "additionalProperties": true
+}

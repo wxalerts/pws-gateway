@@ -1,0 +1,1 @@
+The payload is an object; the status payload is a plain JSON string.

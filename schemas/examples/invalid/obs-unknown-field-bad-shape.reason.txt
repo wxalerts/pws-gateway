@@ -1,0 +1,1 @@
+f.x_new is an unknown field (allowed) but its value is a bare number instead of a field object.

@@ -1,0 +1,1 @@
+v is 7; the server accepts only the current version and the one before it (0 during the draft).

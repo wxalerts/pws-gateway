@@ -1,0 +1,8 @@
+{
+  "v": 0,
+  "id": "c_03",
+  "type": "diag",
+  "ok": false,
+  "error": "service rtl_433 is not managed by this device",
+  "ts": "2026-11-16T14:31:05Z"
+}

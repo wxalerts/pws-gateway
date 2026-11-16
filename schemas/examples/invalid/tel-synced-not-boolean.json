@@ -1,0 +1,11 @@
+{
+  "v": 0,
+  "device_id": "d_8f3a",
+  "ts": "2026-11-16T14:15:03Z",
+  "fw": "0.1.0",
+  "uptime_s": 86400,
+  "time": { "src": "ntp", "offset_ms": 3, "synced": "yes" },
+  "sys": {},
+  "outbox": { "depth": 0, "oldest_s": 0 },
+  "net": { "link": "lte" }
+}

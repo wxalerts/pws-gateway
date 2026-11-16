@@ -1,0 +1,1 @@
+buckets is empty; an obs message carries at least one bucket.

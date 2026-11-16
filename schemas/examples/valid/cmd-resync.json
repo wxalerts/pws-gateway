@@ -1,0 +1,11 @@
+{
+  "id": "c_04",
+  "type": "resync",
+  "device_id": "d_8f3a",
+  "exp": "2026-11-16T15:00:00Z",
+  "body": {
+    "to": "2026-11-16T14:00:00Z",
+    "from": "2026-11-16T12:00:00Z"
+  },
+  "sig": "mqvKNeolD+IErOwbUFPN+QF3ls7b9tWQmf/z6t00uZZA0E4guX64Ghu+WJRmwsQZJ9cB4v938MyZ8D8W8AtCCg=="
+}

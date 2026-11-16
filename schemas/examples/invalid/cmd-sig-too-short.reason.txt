@@ -1,0 +1,1 @@
+sig is 16 bytes of base64; an Ed25519 signature is 64 bytes, 88 base64 characters.

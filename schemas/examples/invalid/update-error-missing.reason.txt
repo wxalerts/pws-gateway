@@ -1,0 +1,1 @@
+error is required (null when there is none) so the field is never ambiguous.

@@ -1,0 +1,105 @@
+{
+  "description": "RFC 8785 (JSON Canonicalization Scheme) vectors for the command signing input. 'input' is any JSON value, kept as written here (key order and number spelling are preserved; regeneration re-indents the whitespace); 'expected' is its canonical form as a string. Regenerate 'expected' with: go test ./internal/contract -run TestCanonicalizeVectorsFile -update. The first two cases are the worked examples from RFC 8785 itself, except that the supplementary plane key uses U+1D11E instead of the RFC's emoji.",
+  "vectors": [
+    {
+      "name": "rfc8785-numbers-strings-literals",
+      "input": {
+        "numbers": [
+          333333333.33333329,
+          1E30,
+          4.50,
+          2e-3,
+          0.000000000000000000000000001
+        ],
+        "string": "\u20ac$\u000F\u000aA'\u0042\u0022\u005c\\\"\/",
+        "literals": [
+          null,
+          true,
+          false
+        ]
+      },
+      "expected": "{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27],\"string\":\"€$\\u000f\\nA'B\\\"\\\\\\\\\\\"/\"}"
+    },
+    {
+      "name": "utf16-key-order",
+      "input": {
+        "\u20ac": "Euro Sign",
+        "\r": "Carriage Return",
+        "\ufb33": "Hebrew Letter Dalet With Dagesh",
+        "1": "One",
+        "\ud834\udd1e": "Musical Symbol G Clef (U+1D11E, surrogate pair D834 DD1E)",
+        "\u0080": "Control",
+        "\u00f6": "Latin Small Letter O With Diaeresis"
+      },
+      "expected": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"𝄞\":\"Musical Symbol G Clef (U+1D11E, surrogate pair D834 DD1E)\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}"
+    },
+    {
+      "name": "whitespace-and-empty-containers",
+      "input": {
+        "b": [],
+        "a": {},
+        "c": [
+          {},
+          [],
+          "",
+          0
+        ]
+      },
+      "expected": "{\"a\":{},\"b\":[],\"c\":[{},[],\"\",0]}"
+    },
+    {
+      "name": "number-layout",
+      "input": [
+        0,
+        -0,
+        1,
+        -1,
+        1.0,
+        100,
+        1e21,
+        1e20,
+        123456789012345680000,
+        0.1,
+        0.000001,
+        0.0000001,
+        1.5e-7,
+        123.456,
+        -1.5E+3,
+        9007199254740993,
+        5e-324,
+        1.7976931348623157e308,
+        12345678901234567890
+      ],
+      "expected": "[0,0,1,-1,1,100,1e+21,100000000000000000000,123456789012345680000,0.1,0.000001,1e-7,1.5e-7,123.456,-1500,9007199254740992,5e-324,1.7976931348623157e+308,12345678901234567000]"
+    },
+    {
+      "name": "string-escapes",
+      "input": {
+        "s": "\u0000\u001f\u00e9\/<>&\t\b\f\r\n\"\\ plain"
+      },
+      "expected": "{\"s\":\"\\u0000\\u001fé/<>&\\t\\b\\f\\r\\n\\\"\\\\ plain\"}"
+    },
+    {
+      "name": "command-shaped",
+      "input": {
+        "type": "config",
+        "id": "c_01",
+        "device_id": "d_8f3a",
+        "exp": "2026-11-16T15:00:00Z",
+        "body": {
+          "uplink": {
+            "interval_s": 300,
+            "jitter_s": 45.0
+          },
+          "stations": [
+            {
+              "selected": true,
+              "key": "Acurite-5n1:1234:A"
+            }
+          ]
+        }
+      },
+      "expected": "{\"body\":{\"stations\":[{\"key\":\"Acurite-5n1:1234:A\",\"selected\":true}],\"uplink\":{\"interval_s\":300,\"jitter_s\":45}},\"device_id\":\"d_8f3a\",\"exp\":\"2026-11-16T15:00:00Z\",\"id\":\"c_01\",\"type\":\"config\"}"
+    }
+  ]
+}

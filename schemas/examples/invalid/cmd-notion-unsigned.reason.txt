@@ -1,0 +1,1 @@
+This is the contract page example verbatim. It predates the signed commands decision and lacks device_id and sig, both of which are now required.

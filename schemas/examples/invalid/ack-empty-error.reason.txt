@@ -1,0 +1,1 @@
+error is an empty string; when present it must be null or a non-empty reason.

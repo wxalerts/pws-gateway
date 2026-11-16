@@ -1,0 +1,11 @@
+{
+  "id": "c_03",
+  "type": "diag",
+  "device_id": "d_8f3a",
+  "exp": "2026-11-16T15:00:00Z",
+  "body": {
+    "service": "rtl_433",
+    "action": "restart_service"
+  },
+  "sig": "sCU80Mgla5oqdqjfJdTE/5il3TKCUmQ5oXiv161jg6bDDJTfD5Xn6dD6Cz2OiE6GGY2y7OfZgnrdpzKSXh5ODg=="
+}

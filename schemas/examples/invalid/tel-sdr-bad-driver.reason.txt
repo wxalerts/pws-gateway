@@ -1,0 +1,1 @@
+sdr[0].driver is 'sdrpp'; the only drivers are rtl_433, davis and capture.

@@ -1,0 +1,1 @@
+wind_dir_deg.vec is 360; a direction is 0 inclusive to 360 exclusive.

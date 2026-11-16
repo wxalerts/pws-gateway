@@ -1,0 +1,1 @@
+key 'Acurite-5n1' has no id and channel segments; a station key is model:id:channel.
