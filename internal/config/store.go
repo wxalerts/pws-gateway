@@ -284,6 +284,17 @@ func (c Config) Clone() Config {
 	}
 	out.Stations = make(map[string]Station, len(c.Stations))
 	for k, v := range c.Stations {
+		if v.Fields != nil {
+			f := make(map[string]bool, len(v.Fields))
+			for n, b := range v.Fields {
+				f[n] = b
+			}
+			v.Fields = f
+		}
+		if v.IncludeRaw != nil {
+			b := *v.IncludeRaw
+			v.IncludeRaw = &b
+		}
 		out.Stations[k] = v
 	}
 	out.Network = c.Network.clone()

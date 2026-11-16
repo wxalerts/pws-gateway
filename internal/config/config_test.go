@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -254,8 +255,57 @@ func TestSeveralStationsMayBeSelected(t *testing.T) {
 	c.Stations["Acurite-5n1:1:A"] = Station{Selected: true}
 	c.Stations["Acurite-609TXC:224:"] = Station{Selected: true}
 	c.Stations["WxAlerts-WxLink:1:"] = Station{Selected: true}
-	c.Stations["Neighbour:9:"] = Station{}
+	c.Stations["Neighbor:9:"] = Station{}
 	if err := c.Validate(); err != nil {
 		t.Fatalf("three selected stations should validate: %v", err)
+	}
+}
+
+func TestEffectiveFields(t *testing.T) {
+	defaults := []string{"temp_c", "humidity_pct", "pressure_station_hpa"}
+	var legacy Station
+	if got := legacy.EffectiveFields(defaults); !slices.Equal(got, defaults) {
+		t.Fatalf("nil map should mean defaults, got %v", got)
+	}
+	s := Station{Fields: map[string]bool{"humidity_pct": false, "wind_speed_ms": true, "bogus": true}}
+	want := []string{"temp_c", "pressure_station_hpa", "wind_speed_ms"}
+	if got := s.EffectiveFields(defaults); !slices.Equal(got, want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	if got := s.EffectiveFields(nil); !slices.Equal(got, []string{"wind_speed_ms"}) {
+		t.Fatalf("nil defaults: %v", got)
+	}
+}
+
+func TestRawIncludedDefault(t *testing.T) {
+	no, yes := false, true
+	cases := []struct {
+		s    Station
+		want bool
+	}{
+		{Station{}, false},
+		{Station{Selected: true}, true},
+		{Station{Selected: true, IncludeRaw: &no}, false},
+		{Station{IncludeRaw: &yes}, true},
+	}
+	for i, c := range cases {
+		if got := c.s.RawIncluded(); got != c.want {
+			t.Errorf("case %d: got %v", i, got)
+		}
+	}
+}
+
+func TestLegacyStationLoadsAndFieldsValidate(t *testing.T) {
+	var st Station
+	if err := json.Unmarshal([]byte(`{"selected":true,"name":"Roof","alt_m":1,"wind_height_m":2}`), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st.Fields != nil || st.IncludeRaw != nil || !st.RawIncluded() {
+		t.Fatalf("legacy station = %+v", st)
+	}
+	c := Defaults()
+	c.Stations["k"] = Station{Fields: map[string]bool{"nonsense": true}}
+	if err := c.Validate(); err == nil {
+		t.Fatal("unknown field name should fail validation")
 	}
 }

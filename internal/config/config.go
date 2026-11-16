@@ -19,6 +19,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/wxalerts/pws-gateway/internal/model"
 )
 
 // SchemaVersion is the version this build writes. Load migrates older files.
@@ -92,6 +94,56 @@ type Station struct {
 	AltM float64 `json:"alt_m"`
 	// WindHeightM is the anemometer height above ground in meters.
 	WindHeightM float64 `json:"wind_height_m"`
+	// Fields maps a canonical field name to whether the owner wants it from
+	// this station. A missing key means "use the model default", and a nil
+	// map (every config written before field selection) means defaults for
+	// all fields. See EffectiveFields.
+	Fields map[string]bool `json:"fields,omitempty"`
+	// IncludeRaw passes the decoder fields that have no canonical name
+	// through under "raw" in the uplink. nil means the default: off for a
+	// station that is not selected (a neighbor), on once the owner selects
+	// it. An explicit false or true always wins. See RawIncluded.
+	IncludeRaw *bool `json:"include_raw,omitempty"`
+}
+
+// EffectiveFields returns the canonical fields that are stored and uplinked
+// for this station, in registry order. This is the one place the rule lives;
+// the collector, the uplink and the web API all call it.
+//
+// defaults is the model default for the fields this station has reported
+// (mapping.DefaultFields). The result starts from defaults, then applies the owner's overrides: a field set to
+// false is removed, a field set to true is added even if it has not been seen
+// yet, so a sensor that reports it later is picked up. Names that are not
+// canonical fields are ignored.
+func (s Station) EffectiveFields(defaults []string) []string {
+	on := map[string]bool{}
+	for _, f := range defaults {
+		on[f] = true
+	}
+	for f, v := range s.Fields {
+		if v {
+			on[f] = true
+		} else {
+			delete(on, f)
+		}
+	}
+	out := make([]string, 0, len(on))
+	for _, f := range model.Registry {
+		if on[f.Name] {
+			out = append(out, f.Name)
+		}
+	}
+	return out
+}
+
+// RawIncluded reports whether unmapped decoder fields are passed through for
+// this station: the explicit IncludeRaw if set, otherwise whether the station
+// is selected.
+func (s Station) RawIncluded() bool {
+	if s.IncludeRaw != nil {
+		return *s.IncludeRaw
+	}
+	return s.Selected
 }
 
 // Uplink configures the MQTT connection to WxAlerts.
@@ -247,6 +299,11 @@ func (c *Config) validateStations(ve *ValidationError) {
 		}
 		if s.AltM < -500 || s.AltM > 9000 {
 			ve.add("stations[%s].alt_m %v out of range", key, s.AltM)
+		}
+		for f := range s.Fields {
+			if _, ok := model.Lookup(f); !ok {
+				ve.add("stations[%s].fields has unknown field %q", key, f)
+			}
 		}
 		if s.WindHeightM < 0 || s.WindHeightM > 100 {
 			ve.add("stations[%s].wind_height_m %v out of range", key, s.WindHeightM)
