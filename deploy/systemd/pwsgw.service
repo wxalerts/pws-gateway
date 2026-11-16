@@ -54,10 +54,14 @@ ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
 ProtectControlGroups=yes
-ProtectClock=yes
+# The daemon reads the kernel NTP state with a read-only adjtimex call. The
+# bounding set below has no CAP_SYS_TIME, so it still cannot set the clock.
+ProtectClock=no
 ProtectHostname=yes
 ProtectProc=invisible
-ProcSubset=pid
+# The platform adapter reads /proc/meminfo and /proc/uptime, which
+# ProcSubset=pid would hide. Other users' processes stay invisible.
+ProcSubset=all
 UMask=0027
 
 # Devices: only USB (the SDR dongles). PrivateDevices would hide them.
@@ -84,6 +88,7 @@ IPAddressAllow=any
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
+SystemCallFilter=adjtimex
 SystemCallErrorNumber=EPERM
 
 # Resource limits sized for a Pi 3B+ with 1 GB RAM. The SQLite cache and the
