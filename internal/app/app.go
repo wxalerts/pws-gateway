@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/wxalerts/pws-gateway/internal/claim"
 	"github.com/wxalerts/pws-gateway/internal/collector"
 	"github.com/wxalerts/pws-gateway/internal/collector/mapping"
 	"github.com/wxalerts/pws-gateway/internal/collector/rtl433"
@@ -60,6 +61,12 @@ type Deps struct {
 	// the broker, logging payload sizes (bench use).
 	UplinkDryRun bool
 
+	// ClaimAPI is the WxAlerts API root for the device claim. Empty means
+	// the production API.
+	ClaimAPI string
+	// ClaimTimeUnit is how long one server second lasts (tests shorten it).
+	ClaimTimeUnit time.Duration
+
 	// Test hooks. Nil means the real thing.
 	Start     rtl433.StartFunc
 	Now       func() time.Time
@@ -76,6 +83,15 @@ type App struct {
 	pipeline *collector.Pipeline
 	// uplink is nil until setupUplink finds a claimed device.
 	uplink atomic.Pointer[uplink.Uplink]
+	claim  *claim.Manager
+
+	// upMu serializes starting and stopping the uplink: boot, a claim and an
+	// unlink can all do it. runCtx is set by Run; upCancel and upDone belong
+	// to the running uplink, if any.
+	upMu     sync.Mutex
+	runCtx   context.Context
+	upCancel context.CancelFunc
+	upDone   chan struct{}
 
 	// lines merges the output of every supervisor into one Source.
 	lines chan rtl433.Line
@@ -130,6 +146,16 @@ func New(deps Deps) (*App, error) {
 		Logger:     a.log,
 	})
 	a.setupUplink()
+	cm, err := claim.New(claim.Options{
+		DataDir: deps.DataDir, Config: deps.Config, Platform: deps.Platform, Logger: a.log,
+		APIBase: deps.ClaimAPI, TimeUnit: deps.ClaimTimeUnit, FW: version.Version, Now: deps.Now,
+		OnClaimed: a.startUplink, OnUnlink: a.stopUplink,
+	})
+	if err != nil {
+		_ = st.Close()
+		return nil, err
+	}
+	a.claim = cm
 	return a, nil
 }
 
@@ -220,19 +246,18 @@ func (a *App) Run(ctx context.Context) error {
 		})
 		wg.Go(func() { a.manageRadios(ctx) })
 	}
-	if u := a.uplink.Load(); u != nil {
-		wg.Go(func() {
-			if err := u.Run(ctx); err != nil && ctx.Err() == nil {
-				a.log.Error("uplink stopped", "err", err)
-			}
-		})
-	}
+	a.upMu.Lock()
+	a.runCtx = ctx
+	a.launchUplinkLocked()
+	a.upMu.Unlock()
+	wg.Go(func() { a.claim.Run(ctx) })
 	wg.Go(func() {
 		if err := a.pipeline.Run(ctx, src); err != nil && ctx.Err() == nil {
 			a.log.Error("pipeline stopped", "err", err)
 		}
 	})
 	<-ctx.Done()
+	a.stopUplink()
 	wg.Wait()
 	return nil
 }

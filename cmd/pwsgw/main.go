@@ -208,7 +208,7 @@ func runCmd(args []string) error {
 	srv, err := web.New(web.Options{
 		Platform: plat, Config: cfgStore, Auth: authStore, Sessions: sessions,
 		Auditor: auth.Auditor{Logger: logger}, Logs: ring, Dist: dist,
-		Stations: rt.Stations(), Readings: rt.Readings(), Status: rt.Status(), Logger: logger,
+		Stations: rt.Stations(), Readings: rt.Readings(), Status: rt.Status(), Claim: rt.Claim(), Logger: logger,
 		Version: version.Version, Commit: version.Commit, BuildDate: version.BuildDate,
 	})
 	if err != nil {

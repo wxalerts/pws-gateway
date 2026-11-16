@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/wxalerts/pws-gateway/internal/claim"
 	"github.com/wxalerts/pws-gateway/internal/collector/rtl433"
 	"github.com/wxalerts/pws-gateway/internal/config"
 	"github.com/wxalerts/pws-gateway/internal/contract"
@@ -25,14 +26,7 @@ const sdrMissingEvery = time.Hour
 // credentialPath resolves the credential file named in the config. A relative
 // name lives in the data directory.
 func (a *App) credentialPath(cfg config.Uplink) string {
-	p := cfg.CredentialFile
-	if p == "" {
-		return ""
-	}
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(a.deps.DataDir, p)
-	}
-	return p
+	return claim.CredentialPath(a.deps.DataDir, cfg)
 }
 
 // setupUplink builds the uplink when the device is claimed: the config names a
@@ -112,6 +106,48 @@ func (a *App) sdrList() []contract.SDR {
 		out = append(out, s)
 	}
 	return out
+}
+
+// launchUplinkLocked runs the uplink when one is built and Run has started.
+// The caller holds upMu.
+func (a *App) launchUplinkLocked() {
+	u := a.uplink.Load()
+	if u == nil || a.runCtx == nil || a.upDone != nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(a.runCtx)
+	done := make(chan struct{})
+	a.upCancel, a.upDone = cancel, done
+	go func() {
+		defer close(done)
+		if err := u.Run(ctx); err != nil && ctx.Err() == nil {
+			a.log.Error("uplink stopped", "err", err)
+		}
+	}()
+}
+
+// startUplink builds and runs the uplink after a claim, without a restart. It
+// does nothing when an uplink is already running.
+func (a *App) startUplink() {
+	a.upMu.Lock()
+	defer a.upMu.Unlock()
+	if a.uplink.Load() == nil {
+		a.setupUplink()
+	}
+	a.launchUplinkLocked()
+}
+
+// stopUplink stops the running uplink, waits for its clean disconnect and
+// drops it, so the device is unclaimed as far as the web layer can tell.
+func (a *App) stopUplink() {
+	a.upMu.Lock()
+	defer a.upMu.Unlock()
+	if a.upCancel != nil {
+		a.upCancel()
+		<-a.upDone
+	}
+	a.upCancel, a.upDone = nil, nil
+	a.uplink.Store(nil)
 }
 
 // Uplink returns the uplink, or nil while the device is unclaimed.

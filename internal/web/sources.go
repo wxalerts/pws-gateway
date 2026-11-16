@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -106,3 +107,56 @@ type NopReadings struct{}
 
 // Readings implements ReadingsSource.
 func (NopReadings) Readings(context.Context, string, time.Time) ([]Reading, error) { return nil, nil }
+
+// ClaimStatus is the device-claim state as the UI shows it. The pointer
+// fields are null in the JSON while they do not apply.
+type ClaimStatus struct {
+	// State is unclaimed, pending or claimed.
+	State                   string  `json:"state"`
+	UserCode                *string `json:"user_code"`
+	VerificationURI         *string `json:"verification_uri"`
+	VerificationURIComplete *string `json:"verification_uri_complete"`
+	ExpiresAt               *string `json:"expires_at"`
+	DeviceID                *string `json:"device_id"`
+	// Error is why the last claim ended: expired, denied or failed.
+	Error *string `json:"error"`
+}
+
+// Errors a ClaimSource returns from ClaimStart, mapped to HTTP statuses.
+var (
+	// ErrClaimLinked means the gateway is already linked here.
+	ErrClaimLinked = errors.New("web: gateway is already linked")
+	// ErrClaimTaken means the server still lists this hardware as linked.
+	ErrClaimTaken = errors.New("web: server already lists this gateway as linked")
+	// ErrClaimBusy means the server asked the gateway to wait.
+	ErrClaimBusy = errors.New("web: the server asked the gateway to wait")
+	// ErrClaimUnreachable means the WxAlerts API could not be reached or
+	// refused the request.
+	ErrClaimUnreachable = errors.New("web: the WxAlerts API is not reachable")
+)
+
+// ClaimSource drives the device-code claim. The claim package adapts to it.
+type ClaimSource interface {
+	Claim() ClaimStatus
+	ClaimStart(ctx context.Context) (ClaimStatus, error)
+	ClaimCancel() ClaimStatus
+	ClaimUnlink() error
+}
+
+// NopClaim is the default ClaimSource: always unclaimed, and starting a
+// claim reports that the WxAlerts API is not available.
+type NopClaim struct{}
+
+// Claim implements ClaimSource.
+func (NopClaim) Claim() ClaimStatus { return ClaimStatus{State: "unclaimed"} }
+
+// ClaimStart implements ClaimSource.
+func (NopClaim) ClaimStart(context.Context) (ClaimStatus, error) {
+	return ClaimStatus{}, ErrClaimUnreachable
+}
+
+// ClaimCancel implements ClaimSource.
+func (NopClaim) ClaimCancel() ClaimStatus { return ClaimStatus{State: "unclaimed"} }
+
+// ClaimUnlink implements ClaimSource.
+func (NopClaim) ClaimUnlink() error { return nil }

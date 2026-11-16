@@ -134,3 +134,6 @@ func radioState(st rtl433.Status) string {
 		return "starting"
 	}
 }
+
+// Claim returns the web.ClaimSource backed by the claim manager.
+func (a *App) Claim() web.ClaimSource { return web.NewClaimSource(a.claim) }

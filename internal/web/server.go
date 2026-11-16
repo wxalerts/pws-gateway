@@ -48,6 +48,8 @@ type Options struct {
 	Stations StationSource
 	Status   StatusSource
 	Readings ReadingsSource
+	// Claim links the gateway to a WxAlerts account. nil means unavailable.
+	Claim ClaimSource
 	// Dist is the UI bundle rooted at index.html. nil serves the placeholder.
 	Dist   fs.FS
 	Logger *slog.Logger
@@ -88,6 +90,9 @@ func New(opts Options) (*Server, error) {
 	}
 	if opts.Readings == nil {
 		opts.Readings = NopReadings{}
+	}
+	if opts.Claim == nil {
+		opts.Claim = NopClaim{}
 	}
 	if opts.Now == nil {
 		opts.Now = time.Now
@@ -130,6 +135,10 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/config/pending", s.authed(s.handleConfigPending))
 	m.HandleFunc("PUT /api/config/{section}", s.authed(s.handleConfigPut))
 	m.HandleFunc("GET /api/uplink", s.authed(s.handleUplink))
+	m.HandleFunc("GET /api/claim", s.authed(s.handleClaim))
+	m.HandleFunc("POST /api/claim/start", s.authed(s.handleClaimStart))
+	m.HandleFunc("POST /api/claim/cancel", s.authed(s.handleClaimCancel))
+	m.HandleFunc("POST /api/claim/unlink", s.authed(s.handleClaimUnlink))
 	m.HandleFunc("GET /api/update", s.authed(s.handleUpdate))
 	m.HandleFunc("POST /api/update/check", s.authed(s.handleNotImplemented))
 	m.HandleFunc("POST /api/update/apply", s.authed(s.handleNotImplemented))
