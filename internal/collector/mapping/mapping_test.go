@@ -209,6 +209,33 @@ func fmtFloat(v float64) string {
 	}
 }
 
+// TestWxLinkNode uses the line rtl_433 (wxalerts fork, protocol 291) prints for
+// the sample frame in testdata/wxlink. The generic rules carry the three
+// canonical fields; the air quality and battery fields stay in Raw.
+func TestWxLinkNode(t *testing.T) {
+	line := `{"time" : "2026-11-16T20:00:00.000000Z", "protocol" : 291, "model" : "WxAlerts-WxLink", "id" : 1, "seq" : 4242, "temperature_C" : 21.370, "humidity" : 61.200, "pressure_hPa" : 1013.250, "iaq" : 52.000, "iaq_accuracy" : 3, "bvoc_ppm" : 0.550, "co2_ppm" : 612, "battery_mV" : 3800, "mic" : "CRC", "mod" : "ASK", "freq" : 433.92, "rssi" : -9.0, "snr" : 20.0, "noise" : -29.0}`
+	r := New().Map(decode(t, line), "radio0")
+	if r.StationKey() != "WxAlerts-WxLink:1:" {
+		t.Fatalf("key = %q", r.StationKey())
+	}
+	if !near(r.Fields[model.FieldTempC], 21.37) || !near(r.Fields[model.FieldHumidityPct], 61.2) || !near(r.Fields[model.FieldPressureHPa], 1013.25) {
+		t.Fatalf("fields = %v", r.Fields)
+	}
+	for _, k := range []string{"iaq", "iaq_accuracy", "bvoc_ppm", "co2_ppm", "battery_mV", "seq", "mic"} {
+		if _, ok := r.Raw[k]; !ok {
+			t.Errorf("raw missing %s: %v", k, r.Raw)
+		}
+	}
+	for _, k := range []string{"temperature_C", "humidity", "pressure_hPa"} {
+		if _, ok := r.Raw[k]; ok {
+			t.Errorf("raw should not contain %s", k)
+		}
+	}
+	if r.Protocol != 291 {
+		t.Fatalf("protocol = %d", r.Protocol)
+	}
+}
+
 func TestFreq1FallbackAndEmptyMaps(t *testing.T) {
 	line := `{"model":"X","id":1,"freq1":915.1,"freq2":915.3,"mod":"FSK"}`
 	r := New().Map(decode(t, line), "")
