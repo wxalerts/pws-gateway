@@ -114,7 +114,7 @@ Acceptance tests:
       current version and records the version; opening a database with a
       higher version than the binary knows refuses to start with a clear
       error.
-- [ ] A station that is not selected produces no rollup rows; selecting it
+- [x] A station that is not selected produces no rollup rows; selecting it
       starts rollups from the next bucket.
 - [ ] Killing the fake `rtl_433` process makes the supervisor restart only
       that radio with exponential backoff, and the restart is counted in the
