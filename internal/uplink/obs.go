@@ -351,3 +351,11 @@ func stripRaw(b *contract.Bucket) bool {
 	}
 	return cleared
 }
+
+// StationFromRollup converts one stored rollup into the contract shape for a
+// relay plugin, with the same field selection and site metadata the uplink
+// uses, so a relay never sees a field the owner unticked.
+func StationFromRollup(b *model.Bucket, ann config.Station) contract.Station {
+	st, _ := stationFromBucket(b, ann, nil)
+	return st
+}

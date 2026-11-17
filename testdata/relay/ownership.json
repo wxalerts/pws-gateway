@@ -1,0 +1,31 @@
+{
+  "description": "Relay owner per station. The Pi sends to CWOP only when owner is device, the server only when owner is server. A station never has both. Both implementations assert this table.",
+  "cases": [
+    {
+      "owner": "device",
+      "pi_sends": true,
+      "server_sends": false
+    },
+    {
+      "owner": "server",
+      "pi_sends": false,
+      "server_sends": true
+    },
+    {
+      "owner": "none",
+      "pi_sends": false,
+      "server_sends": false
+    },
+    {
+      "owner": "",
+      "pi_sends": false,
+      "server_sends": false
+    },
+    {
+      "owner": "both",
+      "pi_sends": false,
+      "server_sends": false,
+      "note": "invalid, treated as none"
+    }
+  ]
+}

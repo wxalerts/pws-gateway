@@ -24,6 +24,7 @@ import (
 	"github.com/wxalerts/pws-gateway/internal/config"
 	"github.com/wxalerts/pws-gateway/internal/model"
 	"github.com/wxalerts/pws-gateway/internal/platform"
+	"github.com/wxalerts/pws-gateway/internal/relay/cwop"
 	"github.com/wxalerts/pws-gateway/internal/store"
 	"github.com/wxalerts/pws-gateway/internal/uplink"
 	"github.com/wxalerts/pws-gateway/internal/version"
@@ -99,6 +100,9 @@ type App struct {
 
 	mu   sync.Mutex
 	runs map[string]*radioRun
+
+	// cwop is the device-owned CWOP relay.
+	cwop *cwop.Runner
 }
 
 type radioRun struct {
@@ -146,6 +150,7 @@ func New(deps Deps) (*App, error) {
 		Logger:     a.log,
 	})
 	a.setupUplink()
+	a.setupRelay()
 	cm, err := claim.New(claim.Options{
 		DataDir: deps.DataDir, Config: deps.Config, Platform: deps.Platform, Logger: a.log,
 		APIBase: deps.ClaimAPI, TimeUnit: deps.ClaimTimeUnit, FW: version.Version, Now: deps.Now,
@@ -251,6 +256,7 @@ func (a *App) Run(ctx context.Context) error {
 	a.launchUplinkLocked()
 	a.upMu.Unlock()
 	wg.Go(func() { a.claim.Run(ctx) })
+	wg.Go(func() { a.cwop.Run(ctx) })
 	wg.Go(func() {
 		if err := a.pipeline.Run(ctx, src); err != nil && ctx.Err() == nil {
 			a.log.Error("pipeline stopped", "err", err)

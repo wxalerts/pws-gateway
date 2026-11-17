@@ -51,7 +51,10 @@ way.
 
 ## Open
 
-- Ask MADIS about bulk or organizational relay support.
-- Confirm CWOP ingest status after the MesoWest gateway sunset.
+- Ask CWOP and MADIS support about bulk or organizational relay. No such route
+  is documented (see [CWOP ingest status and APRS-IS login](../relay/cwop-aprs-is.md)).
 - Attribution rules per destination.
-- APRS-IS login and passcode handling for non-ham CWOP IDs.
+
+Settled 2026-11-17 (issue #2): CWOP ingest does not depend on MesoWest, and
+non-ham `CWxxxx` IDs log in to `cwop.aprs.net:14580` with passcode `-1`. The
+normative relay specification is in [docs/relay/](../relay/README.md).

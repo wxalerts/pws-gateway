@@ -50,6 +50,8 @@ type Options struct {
 	Readings ReadingsSource
 	// Claim links the gateway to a WxAlerts account. nil means unavailable.
 	Claim ClaimSource
+	// Relay reports the device-owned relays. nil means none.
+	Relay RelaySource
 	// Dist is the UI bundle rooted at index.html. nil serves the placeholder.
 	Dist   fs.FS
 	Logger *slog.Logger
@@ -90,6 +92,9 @@ func New(opts Options) (*Server, error) {
 	}
 	if opts.Readings == nil {
 		opts.Readings = NopReadings{}
+	}
+	if opts.Relay == nil {
+		opts.Relay = NopRelay{}
 	}
 	if opts.Claim == nil {
 		opts.Claim = NopClaim{}
@@ -135,6 +140,9 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/config/pending", s.authed(s.handleConfigPending))
 	m.HandleFunc("PUT /api/config/{section}", s.authed(s.handleConfigPut))
 	m.HandleFunc("GET /api/uplink", s.authed(s.handleUplink))
+	m.HandleFunc("GET /api/relay", s.authed(s.handleRelay))
+	m.HandleFunc("PUT /api/relay/cwop/passcode", s.authed(s.handleCWOPPasscodePut))
+	m.HandleFunc("DELETE /api/relay/cwop/passcode", s.authed(s.handleCWOPPasscodeDelete))
 	m.HandleFunc("GET /api/claim", s.authed(s.handleClaim))
 	m.HandleFunc("POST /api/claim/start", s.authed(s.handleClaimStart))
 	m.HandleFunc("POST /api/claim/cancel", s.authed(s.handleClaimCancel))

@@ -9,6 +9,7 @@ import { LoginPage } from './pages/Login';
 import { LogsPage } from './pages/Logs';
 import { NetworkPage } from './pages/Network';
 import { RadiosPage } from './pages/Radios';
+import { RelayPage } from './pages/Relay';
 import { SetupPage } from './pages/Setup';
 import { StationDetailPage } from './pages/StationDetail';
 import { StationsPage } from './pages/Stations';
@@ -31,6 +32,7 @@ export function App() {
         <Route path="stations" element={<StationsPage />} />
         <Route path="stations/:key" element={<StationDetailPage />} />
         <Route path="radios" element={<RadiosPage />} />
+        <Route path="relay" element={<RelayPage />} />
         <Route path="account" element={<AccountPage />} />
         <Route path="uplink" element={<UplinkPage />} />
         <Route path="updates" element={<UpdatesPage />} />

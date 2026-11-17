@@ -1,0 +1,62 @@
+{
+  "description": "Sea-level pressure. P0 = P * (1 - 0.0065 h / (T + 0.0065 h + 273.15)) ^ -5.257, rounded to 0.1 hPa. null means the value is absent. Tolerance for implementations: 0.1 hPa (the expected value is already rounded the way the WxAlerts API rounds it).",
+  "tolerance_hpa": 0.1,
+  "cases": [
+    {
+      "name": "acceptance: 1008.3 hPa at 31 m and 18.2 C",
+      "p_hpa": 1008.3,
+      "t_c": 18.2,
+      "alt_m": 31.0,
+      "expected_hpa": 1012.0
+    },
+    {
+      "name": "sea level station",
+      "p_hpa": 1013.2,
+      "t_c": 15.0,
+      "alt_m": 0.0,
+      "expected_hpa": 1013.2
+    },
+    {
+      "name": "high station, cold",
+      "p_hpa": 840.0,
+      "t_c": -5.0,
+      "alt_m": 1500.0,
+      "expected_hpa": 1013.5
+    },
+    {
+      "name": "below sea level",
+      "p_hpa": 1015.0,
+      "t_c": 22.0,
+      "alt_m": -30.0,
+      "expected_hpa": 1011.5
+    },
+    {
+      "name": "hot lowland",
+      "p_hpa": 1002.4,
+      "t_c": 35.5,
+      "alt_m": 12.0,
+      "expected_hpa": 1003.7
+    },
+    {
+      "name": "missing temperature",
+      "p_hpa": 1008.3,
+      "t_c": null,
+      "alt_m": 31.0,
+      "expected_hpa": null
+    },
+    {
+      "name": "missing altitude",
+      "p_hpa": 1008.3,
+      "t_c": 18.2,
+      "alt_m": null,
+      "expected_hpa": null
+    },
+    {
+      "name": "missing pressure",
+      "p_hpa": null,
+      "t_c": 18.2,
+      "alt_m": 31.0,
+      "expected_hpa": null
+    }
+  ]
+}
