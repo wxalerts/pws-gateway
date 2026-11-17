@@ -128,7 +128,7 @@ golden strings omit the terminator).
 | `b<bbbbb>` | Sea-level pressure in tenths of hPa, 5 digits (the 0.1 hPa value times 10). Omitted if sea-level pressure is absent. |
 | `eWxPG` | Software tag: `e` for other, then the unit name. |
 
-All rounding is half away from zero. The order of the first four fields (dir,
+All rounding is half to even (the same as Python `round` in the API and C `lrint`). The order of the first four fields (dir,
 speed, gust, temperature) is fixed and required by CWOP; the rest follow in the
 order shown. Vectors: `testdata/relay/packet.json`, including the byte for byte
 packet for the contract sample bucket.

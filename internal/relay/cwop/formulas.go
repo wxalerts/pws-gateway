@@ -27,7 +27,7 @@ func SeaLevelPressure(pHPa, tC, altM float64) (hpa float64, ok bool) {
 	if base <= 0 {
 		return 0, false
 	}
-	return math.Round(pHPa*math.Pow(base, slpExponent)*10) / 10, true
+	return math.RoundToEven(pHPa*math.Pow(base, slpExponent)*10) / 10, true
 }
 
 // WindAt10m normalises a wind speed (m/s) measured at heightM to 10 m with the
@@ -38,5 +38,5 @@ func WindAt10m(vMS, heightM float64) (ms float64, ok bool) {
 		return 0, false
 	}
 	v := vMS * math.Log(referenceM/roughnessM) / math.Log(heightM/roughnessM)
-	return math.Round(v*100) / 100, true
+	return math.RoundToEven(v*100) / 100, true
 }

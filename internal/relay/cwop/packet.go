@@ -12,8 +12,9 @@ import (
 // SoftwareTag ends every packet: "e" (other) and the unit name.
 const SoftwareTag = "eWxPG"
 
-// round is half away from zero, as the specification requires.
-func round(x float64) int { return int(math.Round(x)) }
+// round is half to even, as the specification requires (it matches the Python
+// round the API uses and the C lrint of the existing stations).
+func round(x float64) int { return int(math.RoundToEven(x)) }
 
 // formatPosition renders a coordinate in the APRS ddmm.hh form.
 func formatPosition(v float64, lat bool) string {
