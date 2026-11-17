@@ -1,0 +1,10 @@
+// Lets the pwsgw service account read the carrier network time from
+// ModemManager. This is the narrow Time action only; it does not allow
+// enabling, disabling or otherwise controlling the modem.
+//
+// Install as /etc/polkit-1/rules.d/49-pwsgw-modem.rules.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.ModemManager1.Time" && subject.user == "pwsgw") {
+        return polkit.Result.YES;
+    }
+});

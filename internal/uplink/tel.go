@@ -44,15 +44,20 @@ func (u *Uplink) buildTel(ctx context.Context) *contract.Tel {
 		u.log.Warn("health read failed", "err", err)
 	}
 
+	var rtc *platform.RTCInfo
+	if r, err := u.opts.Platform.RTC(ctx); err == nil {
+		rtc = r
+	}
 	if ts, err := u.opts.Platform.TimeSync(ctx); err == nil {
 		tel.Time.Synced = ts.Synced
-		if ts.Synced {
-			tel.Time.Src = "ntp"
-		}
 		if ts.OffsetKnown {
 			tel.Time.OffsetMS = float64(ts.Offset) / float64(time.Millisecond)
 		}
+		tel.Time.Src = platform.TimeSource(ts, rtc)
 	}
+
+	tel.Modem = u.modemTel(ctx)
+	tel.GPS = u.gpsTel(ctx)
 
 	if st, err := u.opts.Store.OutboxStatus(ctx); err == nil {
 		tel.Outbox.Depth = int(st.Count)
@@ -66,6 +71,44 @@ func (u *Uplink) buildTel(ctx context.Context) *contract.Tel {
 	}
 	u.fillPackets(tel)
 	return tel
+}
+
+// modemTel reports the modem, or nil when none is attached or ModemManager
+// is not running, so the tel message then has no modem key.
+func (u *Uplink) modemTel(ctx context.Context) *contract.Modem {
+	m, err := u.opts.Platform.Modem(ctx)
+	if err != nil {
+		if !isUnsupported(err) {
+			u.log.Warn("modem read failed", "err", err)
+		}
+		return nil
+	}
+	if m == nil {
+		return nil
+	}
+	out := &contract.Modem{Carrier: m.Carrier, Reg: m.Reg, Tech: m.Tech, RSSIdBm: m.RSSIdBm}
+	// The contract pattern is five or six digits; anything else is left out
+	// rather than failing validation for the whole message.
+	if n := len(m.MCCMNC); n == 5 || n == 6 {
+		out.MCCMNC = m.MCCMNC
+	}
+	return out
+}
+
+// gpsTel reports the GNSS receiver, or nil when none is attached.
+func (u *Uplink) gpsTel(ctx context.Context) *contract.GPS {
+	g, err := u.opts.Platform.GPS(ctx)
+	if err != nil {
+		if !isUnsupported(err) {
+			u.log.Warn("gps read failed", "err", err)
+		}
+		return nil
+	}
+	if g == nil {
+		return nil
+	}
+	fix, sats := g.Fix, g.Sats
+	return &contract.GPS{Fix: &fix, Sats: &sats, Lat: g.Lat, Lon: g.Lon, AltM: g.AltM}
 }
 
 // fillPackets sets packets_15m on the radio entries that lack it. The

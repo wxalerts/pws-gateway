@@ -14,6 +14,9 @@ const NAV: { to: string; label: string }[] = [
   { to: '/updates', label: 'Updates' },
   { to: '/network', label: 'Network' },
   { to: '/home-assistant', label: 'Home Assistant' },
+  { to: '/modem', label: 'Modem and GPS' },
+  { to: '/i2c', label: 'I2C' },
+  { to: '/time', label: 'Time' },
   { to: '/logs', label: 'Logs' },
   { to: '/about', label: 'About' },
 ];

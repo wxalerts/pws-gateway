@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"os"
+	"time"
 
 	"github.com/wxalerts/pws-gateway/internal/platform"
+	"github.com/wxalerts/pws-gateway/internal/platform/chrony"
 )
 
 // Adapter implements the parts of platform.Platform that every Linux host
@@ -26,18 +28,25 @@ type Adapter struct {
 	// KernelTime queries the kernel clock discipline state. Defaults to
 	// adjtimex.
 	KernelTime func() (KernelTime, error)
+	// HW holds the modem, GPS, I2C and chrony backends.
+	HW *Hardware
+	// PrivDir is where privileged requests are dropped for the root
+	// helper. Default $STATE_DIRECTORY/priv.
+	PrivDir string
 }
 
 // NewAdapter returns an Adapter reading the tree under root ("" for the live
 // system) with production defaults for everything else.
 func NewAdapter(root string) *Adapter {
-	return &Adapter{
+	a := &Adapter{
 		FS:         Host{Root: root},
 		RootFSPath: "/",
 		TmpfsPath:  "/run",
 		FSUsedPct:  FSUsedPct,
 		KernelTime: KernelTimeStatus,
 	}
+	a.HW = newHardware(a)
+	return a
 }
 
 // Health reads the board independent metrics. The caller fills in Throttled.
@@ -132,6 +141,13 @@ func (a *Adapter) TimeSync(ctx context.Context) (platform.TimeSync, error) {
 		ts.Synced = true
 	case a.FS.ChronyRunning():
 		ts.Source = "chrony"
+	}
+	if (a.FS.ChronyRunning() || a.FS.Exists("usr/bin/chronyc")) && a.HW != nil && a.HW.Run != nil {
+		qctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		if cs, err := chrony.Query(qctx, a.HW.Run); err == nil {
+			ts.Ref, ts.LastSync = cs.Ref, cs.LastSync
+		}
+		cancel()
 	}
 	if ktErr != nil && ts.Source == "kernel" {
 		return ts, ktErr

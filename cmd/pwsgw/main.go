@@ -26,7 +26,9 @@ import (
 	"github.com/wxalerts/pws-gateway/internal/config"
 	"github.com/wxalerts/pws-gateway/internal/logging"
 	"github.com/wxalerts/pws-gateway/internal/platform"
+	"github.com/wxalerts/pws-gateway/internal/platform/chrony"
 	_ "github.com/wxalerts/pws-gateway/internal/platform/generic"
+	"github.com/wxalerts/pws-gateway/internal/platform/priv"
 	_ "github.com/wxalerts/pws-gateway/internal/platform/raspberrypi"
 	"github.com/wxalerts/pws-gateway/internal/version"
 	"github.com/wxalerts/pws-gateway/internal/web"
@@ -59,6 +61,8 @@ func main() {
 		err = runCmd(args)
 	case "version":
 		fmt.Println("pwsgw " + version.String())
+	case "priv-apply":
+		err = privApplyCmd(args)
 	case "check-config":
 		err = checkConfigCmd(args)
 	case "hash-password":
@@ -76,7 +80,7 @@ func main() {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "usage: pwsgw [run|version|check-config|hash-password] [flags]")
+	fmt.Fprintln(w, "usage: pwsgw [run|version|check-config|hash-password|priv-apply] [flags]")
 }
 
 func envOr(name, def string) string {
@@ -125,6 +129,18 @@ func checkConfigCmd(args []string) error {
 	}
 	fmt.Printf("%s is valid\n", path)
 	return nil
+}
+
+// privApplyCmd runs the one pending privileged request, if any. It is started
+// as root by pwsgw-priv.service when the daemon drops a request file, and
+// performs only the closed list of actions in internal/platform/priv.
+func privApplyCmd(args []string) error {
+	f, err := parseFlags("priv-apply", args)
+	if err != nil {
+		return err
+	}
+	ex := priv.DefaultExecutor(priv.Runner(chrony.ExecRunner))
+	return priv.Apply(context.Background(), filepath.Join(f.dataDir, "priv"), ex)
 }
 
 func hashPasswordCmd(in io.Reader, out io.Writer) error {
@@ -208,7 +224,7 @@ func runCmd(args []string) error {
 	srv, err := web.New(web.Options{
 		Platform: plat, Config: cfgStore, Auth: authStore, Sessions: sessions,
 		Auditor: auth.Auditor{Logger: logger}, Logs: ring, Dist: dist,
-		Stations: rt.Stations(), Readings: rt.Readings(), Status: rt.Status(), Claim: rt.Claim(), Relay: rt.Relay(), Logger: logger,
+		Stations: rt.Stations(), Readings: rt.Readings(), Status: rt.Status(), Claim: rt.Claim(), Relay: rt.Relay(), Boot: rt.Boot(), Logger: logger,
 		Version: version.Version, Commit: version.Commit, BuildDate: version.BuildDate,
 	})
 	if err != nil {
