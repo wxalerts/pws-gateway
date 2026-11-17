@@ -199,3 +199,83 @@ export interface RelayStatus {
     };
   };
 }
+
+export interface ModemInfo {
+  model: string;
+  state: string;
+  carrier: string;
+  mcc_mnc: string;
+  reg: string;
+  tech: string;
+  rssi_dbm: number | null;
+  signal_pct: number | null;
+  /** RFC 3339. */
+  network_time: string | null;
+}
+
+export interface GpsInfo {
+  /** 0 none, 2 for 2D, 3 for 3D. */
+  fix: 0 | 2 | 3;
+  sats: number;
+  lat: number | null;
+  lon: number | null;
+  alt_m: number | null;
+}
+
+export type UplinkLink = 'lte' | 'ethernet' | 'wifi' | 'unknown';
+
+export interface ModemStatus {
+  modem: ModemInfo | null;
+  gps: GpsInfo | null;
+  link: UplinkLink;
+}
+
+export type I2cKind = 'ds3231' | 'bmp280' | 'bme280' | 'bme680' | 'unknown';
+
+export interface I2cDevice {
+  addr: number;
+  addr_hex: string;
+  kind: I2cKind;
+  label: string;
+  chip_id: number | null;
+  kernel_driver: boolean;
+}
+
+export interface I2cChange {
+  phase: 'idle' | 'staged' | 'applied';
+  candidate: boolean | null;
+  deadline: string | null;
+}
+
+export interface I2cStatus {
+  enabled: boolean;
+  bus_present: boolean;
+  reboot_required: boolean;
+  devices: I2cDevice[];
+  change: I2cChange;
+}
+
+export interface I2cEnableResult {
+  applied: boolean;
+  reboot_required: boolean;
+  /** RFC 3339. */
+  confirm_deadline: string;
+}
+
+export type TimeSource = 'ntp' | 'gps' | 'lte' | 'rtc' | 'none';
+
+export interface RtcInfo {
+  time: string;
+  oscillator_stopped: boolean;
+  temp_c: number | null;
+}
+
+export interface TimeStatus {
+  synced: boolean;
+  source: TimeSource;
+  offset_ms: number | null;
+  last_sync: string | null;
+  rtc: RtcInfo | null;
+  fake_hwclock_disabled: boolean | null;
+  system_time: string;
+}

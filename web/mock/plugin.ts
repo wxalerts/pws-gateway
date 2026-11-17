@@ -16,6 +16,7 @@ import {
   uptimeSeconds,
   type MockState,
 } from './state';
+import { m7Route } from './m7';
 import { readingsSince } from './readings';
 
 const COOKIE = 'pwsgw_session';
@@ -362,6 +363,9 @@ async function route(
     if (Number.isNaN(since)) return fail(res, 400, 'bad_request', 'since must be RFC 3339');
     return send(res, 200, readingsSince(s, since, now));
   }
+
+  const m7 = m7Route(path, method, body, now);
+  if (m7) return send(res, m7.status, m7.body);
 
   if (path === '/api/version' && method === 'GET') {
     return send(res, 200, {

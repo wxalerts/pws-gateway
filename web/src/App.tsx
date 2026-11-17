@@ -5,14 +5,17 @@ import { AccountPage } from './pages/Account';
 import { AboutPage } from './pages/About';
 import { DashboardPage } from './pages/Dashboard';
 import { HomeAssistantPage } from './pages/HomeAssistant';
+import { I2cPage } from './pages/I2c';
 import { LoginPage } from './pages/Login';
 import { LogsPage } from './pages/Logs';
+import { ModemPage } from './pages/Modem';
 import { NetworkPage } from './pages/Network';
 import { RadiosPage } from './pages/Radios';
 import { RelayPage } from './pages/Relay';
 import { SetupPage } from './pages/Setup';
 import { StationDetailPage } from './pages/StationDetail';
 import { StationsPage } from './pages/Stations';
+import { TimePage } from './pages/Time';
 import { UpdatesPage } from './pages/Updates';
 import { UplinkPage } from './pages/Uplink';
 
@@ -38,6 +41,9 @@ export function App() {
         <Route path="updates" element={<UpdatesPage />} />
         <Route path="network" element={<NetworkPage />} />
         <Route path="home-assistant" element={<HomeAssistantPage />} />
+        <Route path="modem" element={<ModemPage />} />
+        <Route path="i2c" element={<I2cPage />} />
+        <Route path="time" element={<TimePage />} />
         <Route path="logs" element={<LogsPage />} />
         <Route path="about" element={<AboutPage />} />
       </Route>
