@@ -307,6 +307,19 @@ func (p *Pipeline) Ingest(ctx context.Context, line rtl433.Line) {
 	p.unlockAndEmit()
 }
 
+// IngestReading processes a reading that did not come from an rtl_433 line,
+// such as one from a sensor on the I2C bus. It takes the same path as a
+// decoded line: held while the clock is unsynced, stamped at sync, then
+// discovered, deduplicated and aggregated. at is the receipt time.
+func (p *Pipeline) IngestReading(ctx context.Context, r model.Reading, at time.Time) {
+	p.mu.Lock()
+	p.st.Lines++
+	p.st.Readings++
+	r.Received = at
+	p.route(ctx, r, at)
+	p.unlockAndEmit()
+}
+
 // route holds or processes one mapped reading depending on clock sync.
 func (p *Pipeline) route(ctx context.Context, r model.Reading, at time.Time) {
 	if p.checkSync(ctx) {

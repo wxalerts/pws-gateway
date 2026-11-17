@@ -50,6 +50,9 @@ type Options struct {
 	Readings ReadingsSource
 	// Claim links the gateway to a WxAlerts account. nil means unavailable.
 	Claim ClaimSource
+	// Boot is the commit-confirm machine for boot configuration changes
+	// (enabling I2C). nil makes those endpoints answer 503.
+	Boot BootChange
 	// Relay reports the device-owned relays. nil means none.
 	Relay RelaySource
 	// Dist is the UI bundle rooted at index.html. nil serves the placeholder.
@@ -140,6 +143,12 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/config/pending", s.authed(s.handleConfigPending))
 	m.HandleFunc("PUT /api/config/{section}", s.authed(s.handleConfigPut))
 	m.HandleFunc("GET /api/uplink", s.authed(s.handleUplink))
+	m.HandleFunc("GET /api/modem", s.authed(s.handleModem))
+	m.HandleFunc("GET /api/i2c", s.authed(s.handleI2C))
+	m.HandleFunc("POST /api/i2c/enable", s.authed(s.handleI2CEnable))
+	m.HandleFunc("POST /api/i2c/confirm", s.authed(s.handleI2CConfirm))
+	m.HandleFunc("POST /api/i2c/rollback", s.authed(s.handleI2CRollback))
+	m.HandleFunc("GET /api/time", s.authed(s.handleTime))
 	m.HandleFunc("GET /api/relay", s.authed(s.handleRelay))
 	m.HandleFunc("PUT /api/relay/cwop/passcode", s.authed(s.handleCWOPPasscodePut))
 	m.HandleFunc("DELETE /api/relay/cwop/passcode", s.authed(s.handleCWOPPasscodeDelete))

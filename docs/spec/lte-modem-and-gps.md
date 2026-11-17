@@ -30,3 +30,11 @@ RSSI back via MQTT for the PWS dashboard.
   points).
 - Resolved: a powered USB hub is required for multi-device kits (SDR plus modem
   or GPS).
+
+## Implementation notes (M7)
+
+- ModemManager is read over the system D-Bus (`internal/platform/modemmanager`).
+  `rssi_dbm` comes from the Signal interface, which the daemon switches on at
+  the first read; the first figure appears one refresh period later.
+- gpsd is read over its JSON socket on localhost. With no receiver attached,
+  `tel` has no `gps` key; with no modem, no `modem` key.

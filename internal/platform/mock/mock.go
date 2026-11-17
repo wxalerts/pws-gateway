@@ -28,6 +28,27 @@ type Platform struct {
 	// RouteIface and RouteErr are the default route interface answer.
 	RouteIface string
 	RouteErr   error
+	// ModemValue, GPSValue and RTCValue are returned as is; nil means the
+	// hardware is absent. The Err fields make the call fail.
+	ModemValue *platform.ModemInfo
+	ModemErr   error
+	GPSValue   *platform.GPSInfo
+	GPSErr     error
+	I2CValue   platform.I2CStatus
+	I2CErr     error
+	RTCValue   *platform.RTCInfo
+	RTCErr     error
+	// BMP280Values maps an I2C address to its pressure.
+	BMP280Values map[int]platform.PressureReading
+	BMP280Err    error
+	// I2CSetCalls records every SetI2CEnabled argument in order.
+	I2CSetCalls []bool
+	I2CSetErr   error
+	// FakeHwclockOff is the answer to FakeHwclockDisabled and is set by
+	// DisableFakeHwclock. FakeHwclockCalls counts those calls.
+	FakeHwclockOff   bool
+	FakeHwclockCalls int
+	FakeHwclockErr   error
 	// RebootCalls counts Reboot invocations.
 	RebootCalls int
 }
@@ -110,6 +131,80 @@ func (m *Platform) Reboot(context.Context) error {
 	defer m.mu.Unlock()
 	m.RebootCalls++
 	return m.RebootErr
+}
+
+// Modem implements platform.Platform.
+func (m *Platform) Modem(context.Context) (*platform.ModemInfo, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ModemValue, m.ModemErr
+}
+
+// GPS implements platform.Platform.
+func (m *Platform) GPS(context.Context) (*platform.GPSInfo, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.GPSValue, m.GPSErr
+}
+
+// I2C implements platform.Platform.
+func (m *Platform) I2C(context.Context) (platform.I2CStatus, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.I2CValue, m.I2CErr
+}
+
+// RTC implements platform.Platform.
+func (m *Platform) RTC(context.Context) (*platform.RTCInfo, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.RTCValue, m.RTCErr
+}
+
+// BMP280 implements platform.Platform.
+func (m *Platform) BMP280(_ context.Context, addr int) (platform.PressureReading, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.BMP280Err != nil {
+		return platform.PressureReading{}, m.BMP280Err
+	}
+	v, ok := m.BMP280Values[addr]
+	if !ok {
+		return platform.PressureReading{}, platform.ErrUnsupported
+	}
+	return v, nil
+}
+
+// SetI2CEnabled implements platform.Platform. The call is recorded and, on
+// success, the scripted I2C status follows so a later read sees the change.
+func (m *Platform) SetI2CEnabled(_ context.Context, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.I2CSetCalls = append(m.I2CSetCalls, enabled)
+	if m.I2CSetErr != nil {
+		return m.I2CSetErr
+	}
+	m.I2CValue.Enabled = enabled
+	return nil
+}
+
+// FakeHwclockDisabled implements platform.Platform.
+func (m *Platform) FakeHwclockDisabled(context.Context) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.FakeHwclockOff, m.FakeHwclockErr
+}
+
+// DisableFakeHwclock implements platform.Platform.
+func (m *Platform) DisableFakeHwclock(context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.FakeHwclockCalls++
+	if m.FakeHwclockErr != nil {
+		return m.FakeHwclockErr
+	}
+	m.FakeHwclockOff = true
+	return nil
 }
 
 // Set applies fn under the lock, for tests that change several fields.

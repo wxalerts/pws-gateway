@@ -142,6 +142,12 @@ type TimeSync struct {
 	// boolean sync state was available.
 	Offset      time.Duration `json:"offset"`
 	OffsetKnown bool          `json:"offset_known"`
+	// Ref is the class of the source chrony has selected: "ntp", "gps",
+	// "lte" or "rtc". Empty when unknown (chrony not running or not
+	// queryable).
+	Ref string `json:"ref,omitempty"`
+	// LastSync is when chrony last updated the clock, zero when unknown.
+	LastSync time.Time `json:"last_sync"`
 }
 
 // Platform is the board adapter. Implementations must be safe for concurrent
@@ -164,6 +170,29 @@ type Platform interface {
 	// address, so telemetry can classify the link without leaking network
 	// details.
 	DefaultRouteInterface(ctx context.Context) (string, error)
+	// Modem returns the cellular modem state, or (nil, nil) when no modem is
+	// attached. ErrUnsupported means the host has no ModemManager at all.
+	Modem(ctx context.Context) (*ModemInfo, error)
+	// GPS returns the GNSS receiver state, or (nil, nil) when gpsd has no
+	// receiver. ErrUnsupported means gpsd is not running.
+	GPS(ctx context.Context) (*GPSInfo, error)
+	// I2C reports the bus state and scans it. A bus that is not enabled or
+	// not present returns an empty device list, not an error.
+	I2C(ctx context.Context) (I2CStatus, error)
+	// RTC reads the DS3231, or (nil, nil) when none answers at 0x68.
+	RTC(ctx context.Context) (*RTCInfo, error)
+	// BMP280 reads the station pressure of the sensor at addr.
+	BMP280(ctx context.Context, addr int) (PressureReading, error)
+	// SetI2CEnabled edits the boot configuration to enable or disable the
+	// I2C bus. It takes effect after a reboot. It is the boot change that
+	// the commit-confirm flow wraps.
+	SetI2CEnabled(ctx context.Context, enabled bool) error
+	// FakeHwclockDisabled reports whether the fake-hwclock service is
+	// disabled, ErrUnsupported when it cannot be told.
+	FakeHwclockDisabled(ctx context.Context) (bool, error)
+	// DisableFakeHwclock disables fake-hwclock, which an RTC makes
+	// redundant. It is idempotent.
+	DisableFakeHwclock(ctx context.Context) error
 	// Reboot restarts the host. It returns ErrUnsupported until the signed
 	// remote command path exists; nothing may call it on its own.
 	Reboot(ctx context.Context) error

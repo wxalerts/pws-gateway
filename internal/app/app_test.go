@@ -288,3 +288,50 @@ func TestStationWithoutBatteryFlagIsUnknown(t *testing.T) {
 	}
 	t.Fatal("station not discovered")
 }
+
+func TestFakeHwclockDisabledWhenRTCPresent(t *testing.T) {
+	cs, dir := newConfig(t)
+	plat := mock.New()
+	a, err := New(Deps{DataDir: dir, Config: cs, Platform: plat, Logger: quietLogger()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	a.disableFakeHwclockIfRTC(ctx) // no DS3231: leave fake-hwclock alone
+	if plat.FakeHwclockCalls != 0 {
+		t.Fatalf("disabled without an RTC: %d", plat.FakeHwclockCalls)
+	}
+
+	plat.Set(func(p *mock.Platform) {
+		p.RTCValue = &platform.RTCInfo{Time: time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)}
+	})
+	a.disableFakeHwclockIfRTC(ctx)
+	a.disableFakeHwclockIfRTC(ctx) // idempotent: already disabled
+	if plat.FakeHwclockCalls != 1 || !plat.FakeHwclockOff {
+		t.Fatalf("calls=%d off=%v", plat.FakeHwclockCalls, plat.FakeHwclockOff)
+	}
+}
+
+func TestBMP280FoundOnTheBusBecomesAStationSource(t *testing.T) {
+	cs, dir := newConfig(t)
+	plat := mock.New()
+	plat.I2CValue = platform.I2CStatus{Enabled: true, BusPresent: true, Devices: []platform.I2CDevice{
+		{Addr: 0x68, Kind: platform.I2CKindDS3231},
+		{Addr: 0x76, Kind: platform.I2CKindBMP280},
+		{Addr: 0x77, Kind: platform.I2CKindBME280},
+	}}
+	plat.BMP280Values = map[int]platform.PressureReading{0x76: {StationHPa: 1006.5}}
+	a, err := New(Deps{DataDir: dir, Config: cs, Platform: plat, Logger: quietLogger()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sensors := a.findBarometers(context.Background())
+	if len(sensors) != 1 || sensors[0].ID() != "i2c1-0x76" {
+		t.Fatalf("sensors = %v", sensors)
+	}
+	hpa, err := sensors[0].ReadHPa(context.Background())
+	if err != nil || hpa != 1006.5 {
+		t.Fatalf("hpa=%v err=%v", hpa, err)
+	}
+}

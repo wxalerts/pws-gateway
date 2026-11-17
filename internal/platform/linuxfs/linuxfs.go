@@ -327,3 +327,20 @@ func (h Host) DefaultRouteInterface() (string, error) {
 	}
 	return best, nil
 }
+
+// BootConfig returns the Raspberry Pi boot configuration, trying the
+// bookworm location first. ok is false when neither file exists.
+func (h Host) BootConfig() (content []byte, ok bool) {
+	for _, rel := range []string{"boot/firmware/config.txt", "boot/config.txt"} {
+		if b, err := os.ReadFile(h.path(rel)); err == nil {
+			return b, true
+		}
+	}
+	return nil, false
+}
+
+// I2CDriverBound reports whether a kernel driver owns the device at addr on
+// the given bus, as the i2c-rtc overlay does for a DS3231.
+func (h Host) I2CDriverBound(bus, addr int) bool {
+	return h.Exists(fmt.Sprintf("sys/bus/i2c/devices/%d-%04x/driver", bus, addr))
+}

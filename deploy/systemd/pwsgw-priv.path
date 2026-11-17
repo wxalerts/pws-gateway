@@ -1,0 +1,14 @@
+# Starts pwsgw-priv.service when the daemon drops a privileged request.
+#
+# Install: install -m 0644 pwsgw-priv.path pwsgw-priv.service /etc/systemd/system/
+#          systemctl enable --now pwsgw-priv.path
+
+[Unit]
+Description=WxAlerts PWS Gateway privileged request watcher
+
+[Path]
+PathExists=/var/lib/pwsgw/priv/request.json
+Unit=pwsgw-priv.service
+
+[Install]
+WantedBy=multi-user.target

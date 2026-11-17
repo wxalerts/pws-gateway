@@ -3,7 +3,7 @@
 # Install:
 #   install -m 0755 pwsgw /usr/local/bin/pwsgw
 #   useradd --system --home /var/lib/pwsgw --shell /usr/sbin/nologin \
-#           --groups plugdev pwsgw
+#           --groups plugdev,i2c pwsgw
 #   install -m 0644 pwsgw.service /etc/systemd/system/
 #   systemctl daemon-reload && systemctl enable --now pwsgw
 #
@@ -33,7 +33,9 @@ User=pwsgw
 Group=pwsgw
 # plugdev matches the group deploy/udev/99-rtl-sdr.rules assigns to the
 # dongle, so the daemon can start rtl_433 against it without root.
-SupplementaryGroups=plugdev
+# i2c gives access to /dev/i2c-1 for the DS3231 and BMP280 pages. The daemon
+# talks to gpsd and ModemManager over localhost and D-Bus, never to their ttys.
+SupplementaryGroups=plugdev i2c
 
 # systemd creates these with the right owner. The daemon receives their
 # paths in $STATE_DIRECTORY, $CONFIGURATION_DIRECTORY, $LOGS_DIRECTORY and
@@ -68,6 +70,7 @@ UMask=0027
 PrivateDevices=no
 DevicePolicy=closed
 DeviceAllow=char-usb_device rw
+DeviceAllow=char-i2c rw
 
 # Privileges. CAP_NET_BIND_SERVICE lets the UI listen on 443 as a plain user.
 NoNewPrivileges=yes

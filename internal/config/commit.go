@@ -176,6 +176,19 @@ func (c *Commit[T]) Expire() (bool, error) {
 	return true, c.rollbackLocked()
 }
 
+// Restore puts the machine back into PhaseApplied after a restart: active is
+// what is in effect now, previous what a rollback must reinstate. It is for
+// changes that survive a reboot, where the process that applied the change is
+// not the one that confirms or expires it.
+func (c *Commit[T]) Restore(active, previous T, deadline time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.active, c.previous = active, previous
+	c.pending = &active
+	c.deadline = deadline
+	c.phase = PhaseApplied
+}
+
 // State returns a snapshot.
 func (c *Commit[T]) State() State[T] {
 	c.mu.Lock()

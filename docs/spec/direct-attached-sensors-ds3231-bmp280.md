@@ -26,3 +26,18 @@ help from the web UI to enable and read them.
   addresses and chip IDs above.
 - The BMP280 station key format is a repo choice to be made when it is built;
   the Notion page only says "its own station key".
+
+## Implementation notes (M7)
+
+- The BMP280 station key is `BMP280:i2c1-0x76:` (model, bus and address, empty
+  channel), so a second sensor on 0x77 is its own station. It reports
+  `pressure_station_hpa` only and never a `temp_c`.
+- A BME280 (chip ID `0x60`) and a BME680 (`0x61`) are identified by the scan
+  but are not used as stations yet.
+- A DS3231 bound by the `i2c-rtc` overlay shows as busy to `i2cdetect`. The
+  daemon reads it with forced addressing and only ever reads, so the kernel
+  driver is not disturbed.
+- Enabling I2C edits `config.txt` through the root helper
+  (`deploy/systemd/pwsgw-priv.path`) under the commit-confirm machine in
+  `internal/bootchange`. The pending change is stored in the data directory,
+  survives the reboot, and is rolled back if it is not confirmed in 15 minutes.

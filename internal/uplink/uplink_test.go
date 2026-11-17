@@ -13,6 +13,7 @@ import (
 	"github.com/wxalerts/pws-gateway/internal/config"
 	"github.com/wxalerts/pws-gateway/internal/contract"
 	"github.com/wxalerts/pws-gateway/internal/model"
+	"github.com/wxalerts/pws-gateway/internal/platform"
 	"github.com/wxalerts/pws-gateway/internal/platform/mock"
 )
 
@@ -569,3 +570,72 @@ type counter struct{ n int64 }
 
 func (counter) Readings(string, time.Time) []model.Reading { return nil }
 func (c counter) Status() collector.Status                 { return collector.Status{Readings: c.n} }
+
+func TestTelModemAndGPSPresentOnlyWhenAttached(t *testing.T) {
+	r := newRig(t, t0)
+	u := r.uplink(nil)
+	ctx := context.Background()
+
+	tel := u.buildTel(ctx)
+	if tel.Modem != nil || tel.GPS != nil {
+		t.Fatalf("no hardware: modem=%v gps=%v", tel.Modem, tel.GPS)
+	}
+	raw, err := contract.Marshal(tel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), `"modem"`) || strings.Contains(string(raw), `"gps"`) {
+		t.Fatalf("tel has modem or gps keys with no hardware: %s", raw)
+	}
+
+	rssi, lat, lon, alt := -83.0, 30.6321, -87.0398, 31.4
+	r.plat.Set(func(p *mock.Platform) {
+		p.ModemValue = &platform.ModemInfo{Carrier: "AT&T", MCCMNC: "310410", Reg: "home", Tech: "lte", RSSIdBm: &rssi}
+		p.GPSValue = &platform.GPSInfo{Fix: 3, Sats: 9, Lat: &lat, Lon: &lon, AltM: &alt}
+		p.TimeSyncValue.Ref = "gps"
+	})
+	tel = u.buildTel(ctx)
+	if tel.Modem == nil || tel.Modem.Carrier != "AT&T" || tel.Modem.MCCMNC != "310410" || tel.Modem.Reg != "home" ||
+		tel.Modem.Tech != "lte" || tel.Modem.RSSIdBm == nil || *tel.Modem.RSSIdBm != -83 {
+		t.Fatalf("modem = %+v", tel.Modem)
+	}
+	if tel.GPS == nil || *tel.GPS.Fix != 3 || *tel.GPS.Sats != 9 || *tel.GPS.Lat != lat || *tel.GPS.Lon != lon || *tel.GPS.AltM != alt {
+		t.Fatalf("gps = %+v", tel.GPS)
+	}
+	if tel.Time.Src != "gps" || !tel.Time.Synced {
+		t.Fatalf("time = %+v", tel.Time)
+	}
+	raw, err = contract.Marshal(tel) // validates against tel.schema.json
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := contract.Validate(contract.KindTel, raw); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTelTimeSourceFromRTCWhenUnsynced(t *testing.T) {
+	r := newRig(t, t0)
+	u := r.uplink(nil)
+	ctx := context.Background()
+	r.plat.Set(func(p *mock.Platform) {
+		p.TimeSyncValue.Synced = false
+		p.RTCValue = &platform.RTCInfo{Time: t0}
+	})
+	if tel := u.buildTel(ctx); tel.Time.Src != "rtc" || tel.Time.Synced {
+		t.Fatalf("healthy RTC, unsynced: %+v", tel.Time)
+	}
+	r.plat.Set(func(p *mock.Platform) { p.RTCValue = &platform.RTCInfo{Time: t0, OscillatorStopped: true} })
+	if tel := u.buildTel(ctx); tel.Time.Src != "none" || tel.Time.Synced {
+		t.Fatalf("stopped oscillator must not be a source: %+v", tel.Time)
+	}
+}
+
+func TestTelLinkIsLTEOnWWAN(t *testing.T) {
+	r := newRig(t, t0)
+	u := r.uplink(nil)
+	r.plat.Set(func(p *mock.Platform) { p.RouteIface = "wwan0" })
+	if tel := u.buildTel(context.Background()); tel.Net.Link != "lte" {
+		t.Fatalf("link = %q", tel.Net.Link)
+	}
+}

@@ -1,0 +1,20 @@
+# Runs the one pending privileged request as root: switching the I2C bus in
+# /boot/firmware/config.txt and disabling fake-hwclock. The daemon itself runs
+# unprivileged and cannot write the boot partition. The request names an action
+# from a closed list (internal/platform/priv); it carries no path or argument.
+
+[Unit]
+Description=WxAlerts PWS Gateway privileged request
+Documentation=https://github.com/wxalerts/pws-gateway
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/pwsgw priv-apply --data-dir /var/lib/pwsgw
+User=root
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes

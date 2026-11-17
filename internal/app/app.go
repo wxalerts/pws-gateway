@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/wxalerts/pws-gateway/internal/bootchange"
 	"github.com/wxalerts/pws-gateway/internal/claim"
 	"github.com/wxalerts/pws-gateway/internal/collector"
 	"github.com/wxalerts/pws-gateway/internal/collector/mapping"
@@ -67,6 +68,9 @@ type Deps struct {
 	ClaimAPI string
 	// ClaimTimeUnit is how long one server second lasts (tests shorten it).
 	ClaimTimeUnit time.Duration
+	// BootWindow is the confirmation window for boot configuration changes
+	// such as enabling I2C. Zero takes bootchange.DefaultWindow.
+	BootWindow time.Duration
 
 	// Test hooks. Nil means the real thing.
 	Start     rtl433.StartFunc
@@ -85,6 +89,7 @@ type App struct {
 	// uplink is nil until setupUplink finds a claimed device.
 	uplink atomic.Pointer[uplink.Uplink]
 	claim  *claim.Manager
+	boot   *bootchange.Manager
 
 	// upMu serializes starting and stopping the uplink: boot, a claim and an
 	// unlink can all do it. runCtx is set by Run; upCancel and upDone belong
@@ -151,6 +156,10 @@ func New(deps Deps) (*App, error) {
 	})
 	a.setupUplink()
 	a.setupRelay()
+	if err := a.setupHardware(); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
 	cm, err := claim.New(claim.Options{
 		DataDir: deps.DataDir, Config: deps.Config, Platform: deps.Platform, Logger: a.log,
 		APIBase: deps.ClaimAPI, TimeUnit: deps.ClaimTimeUnit, FW: version.Version, Now: deps.Now,
@@ -256,6 +265,7 @@ func (a *App) Run(ctx context.Context) error {
 	a.launchUplinkLocked()
 	a.upMu.Unlock()
 	wg.Go(func() { a.claim.Run(ctx) })
+	wg.Go(func() { a.runHardware(ctx) })
 	wg.Go(func() { a.cwop.Run(ctx) })
 	wg.Go(func() {
 		if err := a.pipeline.Run(ctx, src); err != nil && ctx.Err() == nil {
