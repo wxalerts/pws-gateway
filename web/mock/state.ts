@@ -95,7 +95,40 @@ export interface MockClaim {
 export const CLAIM_EXPIRES_MS = 10 * 60_000;
 export const CLAIM_APPROVE_AFTER_MS = 25_000;
 
+export interface MockConnection {
+  name: string;
+  type: 'ethernet' | 'wifi' | 'cellular';
+  interface?: string;
+  autoconnect: boolean;
+  ipv4: {
+    method: 'auto' | 'manual' | 'shared';
+    address?: string;
+    gateway?: string;
+    dns?: string[];
+    dns_search?: string[];
+  };
+  wifi?: { ssid: string; hidden?: boolean };
+  priority?: number;
+  hotspot?: boolean;
+}
+
+export interface MockNet {
+  connections: MockConnection[];
+  hostname: string;
+  /** Set while a change waits for confirmation; holds what to go back to. */
+  pending: {
+    deadline: number;
+    changed: string[];
+    before: { connections: MockConnection[]; hostname: string };
+    timer: ReturnType<typeof setTimeout>;
+  } | null;
+}
+
 export interface MockState {
+  net: MockNet;
+  /** When set, an "install now" run started at this time (ms). */
+  updateRunAt: number | null;
+  updateCheckedAt: number;
   claim: MockClaim;
   needsSetup: boolean;
   user: { username: string; password: string } | null;
@@ -121,6 +154,36 @@ function minutesAgo(min: number): string {
 export function createState(): MockState {
   const needsSetup = process.env.MOCK_NEEDS_SETUP === '1';
   return {
+    net: {
+      hostname: 'pwsgw',
+      pending: null,
+      connections: [
+        {
+          name: 'Wired',
+          type: 'ethernet',
+          interface: 'eth0',
+          autoconnect: true,
+          ipv4: { method: 'auto' },
+        },
+        {
+          name: 'HomeWiFi',
+          type: 'wifi',
+          autoconnect: true,
+          ipv4: { method: 'auto' },
+          wifi: { ssid: 'HomeWiFi' },
+          priority: 10,
+        },
+        {
+          name: 'Garage',
+          type: 'wifi',
+          autoconnect: true,
+          ipv4: { method: 'auto' },
+          wifi: { ssid: 'Garage' },
+        },
+      ],
+    },
+    updateRunAt: null,
+    updateCheckedAt: Date.now() - 42 * 60_000,
     claim: { state: 'unclaimed', startedAt: 0, error: null, deviceId: null },
     needsSetup,
     user: needsSetup ? null : { username: 'admin', password: 'admin' },
@@ -215,6 +278,7 @@ export function createState(): MockState {
     ],
     config: {
       network: { hostname: 'pwsgw', dhcp: true, address: null, gateway: null, dns: [] },
+      updates: { window: '02:00-04:00', channel: 'stable' },
       homeassistant: { enabled: false, discovery_prefix: 'homeassistant' },
     },
     pendingConfirm: null,

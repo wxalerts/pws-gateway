@@ -140,12 +140,86 @@ export interface Uplink {
 export type UpdateState =
   'idle' | 'downloading' | 'staged' | 'rebooting' | 'good' | 'rolled_back' | 'failed' | 'deferred';
 
+export type DeferKind = 'window' | 'lte' | 'download';
+
 export interface UpdateStatus {
   current: string;
   target: string | null;
   state: UpdateState;
   error: string | null;
   ts: string;
+  detail?: string;
+  defer_kind?: DeferKind;
+  /** Short machine code for a failed update. */
+  code?: string;
+  /** Download progress, 0 to 100. */
+  progress?: number;
+  os_deferred?: boolean;
+  last_check?: string;
+  /** Update window as HH:MM-HH:MM. */
+  window?: string;
+  channel?: 'stable' | 'beta';
+  /** False on a development build: updates are off. */
+  enabled?: boolean;
+}
+
+export interface UpdateSettings {
+  window: string;
+  channel: 'stable' | 'beta';
+}
+
+export interface NetDevice {
+  name: string;
+  type: string;
+  state: string;
+  active?: string;
+  addresses?: string[];
+  mac?: string;
+}
+
+export interface Ipv4Settings {
+  method: 'auto' | 'manual' | 'shared';
+  address?: string;
+  gateway?: string;
+  dns?: string[];
+  dns_search?: string[];
+}
+
+export interface NetConnection {
+  name: string;
+  type: 'ethernet' | 'wifi' | 'cellular';
+  interface?: string;
+  autoconnect: boolean;
+  ipv4: Ipv4Settings;
+  wifi?: { ssid: string; hidden?: boolean; /** Write only, never returned. */ psk?: string };
+  priority?: number;
+  hotspot?: boolean;
+}
+
+export interface NetworkStatus {
+  devices: NetDevice[];
+  connections: NetConnection[];
+  connectivity: 'none' | 'limited' | 'full' | 'unknown';
+  hostname: string;
+  pending?: { deadline: string; changed: string[] };
+  hotspot?: { ssid: string };
+}
+
+export interface NetworkApplyRequest {
+  connections: NetConnection[];
+  hostname?: string;
+}
+
+export interface NetworkApplyResult {
+  applied: boolean;
+  confirm_deadline: string;
+  changed: string[];
+}
+
+export interface WifiNetwork {
+  ssid: string;
+  signal: number;
+  secured: boolean;
 }
 
 export interface Reading {

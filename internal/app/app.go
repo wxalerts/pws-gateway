@@ -24,9 +24,11 @@ import (
 	"github.com/wxalerts/pws-gateway/internal/collector/rtl433"
 	"github.com/wxalerts/pws-gateway/internal/config"
 	"github.com/wxalerts/pws-gateway/internal/model"
+	"github.com/wxalerts/pws-gateway/internal/netcfg"
 	"github.com/wxalerts/pws-gateway/internal/platform"
 	"github.com/wxalerts/pws-gateway/internal/relay/cwop"
 	"github.com/wxalerts/pws-gateway/internal/store"
+	"github.com/wxalerts/pws-gateway/internal/update"
 	"github.com/wxalerts/pws-gateway/internal/uplink"
 	"github.com/wxalerts/pws-gateway/internal/version"
 	"github.com/wxalerts/pws-gateway/internal/web"
@@ -58,6 +60,9 @@ type Deps struct {
 	// the first line lands now, which makes a stale recording look live.
 	ReplaySpeed       float64
 	ReplayRewriteTime bool
+
+	// M6 carries the updater and network manager collaborators.
+	M6 M6Deps
 
 	// UplinkDryRun builds and enqueues uplink messages but never connects to
 	// the broker, logging payload sizes (bench use).
@@ -106,6 +111,9 @@ type App struct {
 	mu   sync.Mutex
 	runs map[string]*radioRun
 
+	// updater and netcfg are nil when their features are off (m6.go).
+	updater *update.Updater
+	netcfg  *netcfg.Manager
 	// cwop is the device-owned CWOP relay.
 	cwop *cwop.Runner
 }
@@ -160,6 +168,8 @@ func New(deps Deps) (*App, error) {
 		_ = st.Close()
 		return nil, err
 	}
+	a.setupNetcfg()
+	a.setupUpdater()
 	cm, err := claim.New(claim.Options{
 		DataDir: deps.DataDir, Config: deps.Config, Platform: deps.Platform, Logger: a.log,
 		APIBase: deps.ClaimAPI, TimeUnit: deps.ClaimTimeUnit, FW: version.Version, Now: deps.Now,
@@ -267,6 +277,7 @@ func (a *App) Run(ctx context.Context) error {
 	wg.Go(func() { a.claim.Run(ctx) })
 	wg.Go(func() { a.runHardware(ctx) })
 	wg.Go(func() { a.cwop.Run(ctx) })
+	a.runM6(ctx, wg.Go)
 	wg.Go(func() {
 		if err := a.pipeline.Run(ctx, src); err != nil && ctx.Err() == nil {
 			a.log.Error("pipeline stopped", "err", err)

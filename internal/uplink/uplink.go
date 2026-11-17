@@ -89,6 +89,11 @@ type Options struct {
 	SDRs func() []contract.SDR
 	// FlushRollups persists closed buckets before a cycle reads them.
 	FlushRollups func(context.Context) error
+	// UpdateState returns the updater's state for the retained update
+	// message. nil reports idle.
+	UpdateState func() contract.Update
+	// UpdateCheck runs the update-check command. nil answers not_implemented.
+	UpdateCheck func(ctx context.Context) (map[string]any, error)
 	// DiagHandler runs an allow-listed diag action. nil answers not_implemented.
 	DiagHandler func(ctx context.Context, body contract.DiagBody) (map[string]any, error)
 
@@ -198,14 +203,45 @@ func (u *Uplink) Status() Status {
 	return st
 }
 
-// UpdateMessage is the retained update payload: idle until the updater (M6)
-// exists.
+// UpdateMessage is the retained update payload: the updater's state, or idle
+// when no updater is wired.
 func (u *Uplink) UpdateMessage() contract.Update {
 	v := contract.Version
+	if u.opts.UpdateState != nil {
+		m := u.opts.UpdateState()
+		m.V, m.DeviceID = &v, u.opts.DeviceID
+		return m
+	}
 	return contract.Update{
 		V: &v, DeviceID: u.opts.DeviceID,
 		Current: version.Version, State: contract.UpdateIdle,
 		TS: u.now().UTC().Truncate(time.Second),
+	}
+}
+
+// PublishUpdate publishes the current update state as the retained update
+// message. While disconnected it does nothing: the state goes out with the
+// retained messages when the connection comes up.
+func (u *Uplink) PublishUpdate(ctx context.Context) {
+	if !u.connected.Load() {
+		return
+	}
+	u.mu.Lock()
+	cm := u.cm
+	u.mu.Unlock()
+	if cm == nil {
+		return
+	}
+	upd := u.UpdateMessage()
+	data, err := contract.Marshal(&upd)
+	if err != nil {
+		u.log.Error("build update message", "err", err)
+		return
+	}
+	pctx, cancel := context.WithTimeout(ctx, publishTimeout)
+	defer cancel()
+	if err := u.publishVia(pctx, cm, contract.Topic(u.opts.DeviceID, contract.KindUpdate), data, true); err != nil {
+		u.log.Warn("publish update failed", "err", err)
 	}
 }
 

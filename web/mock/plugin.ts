@@ -14,6 +14,7 @@ import {
   recompute,
   toApi,
   uptimeSeconds,
+  type MockConnection,
   type MockState,
 } from './state';
 import { m7Route } from './m7';
@@ -330,24 +331,15 @@ async function route(
     });
   }
 
-  if (path === '/api/update' && method === 'GET') {
-    // Walk through a believable update cycle every few minutes.
-    const phase = Math.floor(now / 60_000) % 12;
-    const u = state.update;
-    if (phase === 0) Object.assign(u, { state: 'idle', target: null, error: null });
-    else if (phase === 1) Object.assign(u, { state: 'downloading', target: '0.3.2', error: null });
-    else if (phase === 2) Object.assign(u, { state: 'staged', target: '0.3.2' });
-    else if (phase === 3) Object.assign(u, { state: 'deferred', target: '0.3.2' });
-    else if (phase === 4)
-      Object.assign(u, {
-        state: 'rolled_back',
-        target: '0.3.2',
-        error: 'health check failed after reboot',
-      });
-    else Object.assign(u, { state: 'good', target: null, error: null });
-    u.ts = new Date(now - (now % 60_000)).toISOString();
-    return send(res, 200, u);
+  if (path === '/api/update' && method === 'GET') return send(res, 200, updateBody(state, now));
+  if ((path === '/api/update/check' || path === '/api/update/apply') && method === 'POST') {
+    if (state.updateRunAt !== null) return fail(res, 409, 'busy', 'An update is already running');
+    state.updateCheckedAt = now;
+    if (path === '/api/update/apply') state.updateRunAt = now;
+    return send(res, 202, { started: true });
   }
+
+  if (path.startsWith('/api/network')) return network(state, method, path, body, res, now);
 
   if (path === '/api/logs' && method === 'GET') {
     const lines = Math.min(2000, Math.max(1, Number(url.searchParams.get('lines') ?? 200) || 200));
@@ -377,6 +369,202 @@ async function route(
 
   if (path === '/api/health' || path === '/api/stations' || path === '/api/radios') {
     return fail(res, 405, 'method_not_allowed');
+  }
+  return fail(res, 404, 'not_found', `No route for ${method} ${path}`);
+}
+
+function updateBody(state: MockState, now: number) {
+  const u = state.update;
+  const updates = state.config.updates as { window: string; channel: string };
+  const extra: Record<string, unknown> = {};
+  if (state.updateRunAt !== null) {
+    // "Install now": download for 8s, restart for 8s (the API keeps answering here).
+    const el = (now - state.updateRunAt) / 1000;
+    if (el < 8) {
+      Object.assign(u, { state: 'downloading', target: '0.3.2', error: null });
+      extra.progress = Math.round((el / 8) * 100);
+    } else if (el < 16) {
+      Object.assign(u, { state: 'rebooting', target: '0.3.2', error: null });
+    } else {
+      Object.assign(u, { state: 'good', current: '0.3.2', target: null, error: null });
+      state.updateRunAt = null;
+    }
+    u.ts = new Date(now).toISOString();
+  } else {
+    // Walk through a believable update cycle every few minutes.
+    const phase = Math.floor(now / 60_000) % 12;
+    if (phase === 0) Object.assign(u, { state: 'idle', target: null, error: null });
+    else if (phase === 1) {
+      Object.assign(u, { state: 'downloading', target: '0.3.2', error: null });
+      extra.progress = Math.round(((now % 60_000) / 60_000) * 100);
+    } else if (phase === 2) Object.assign(u, { state: 'staged', target: '0.3.2' });
+    else if (phase === 3) {
+      Object.assign(u, { state: 'deferred', target: '0.3.2' });
+      extra.defer_kind = 'window';
+      extra.detail = 'Next update window opens at 02:00.';
+      extra.os_deferred = true;
+    } else if (phase === 4)
+      Object.assign(u, {
+        state: 'rolled_back',
+        target: '0.3.2',
+        error: 'health check failed after reboot',
+      });
+    else if (phase === 5) {
+      Object.assign(u, { state: 'failed', target: '0.3.2', error: 'signature did not verify' });
+      extra.code = 'bad_signature';
+    } else Object.assign(u, { state: 'good', target: null, error: null });
+    u.ts = new Date(now - (now % 60_000)).toISOString();
+  }
+  return {
+    ...u,
+    ...extra,
+    last_check: new Date(state.updateCheckedAt).toISOString(),
+    window: updates.window,
+    channel: updates.channel,
+    enabled: process.env.MOCK_UPDATES_OFF !== '1',
+  };
+}
+
+function networkBody(state: MockState) {
+  const n = state.net;
+  const eth = n.connections.find((c) => c.type === 'ethernet');
+  const wifi = n.connections.find((c) => c.name === 'HomeWiFi');
+  const ethAddr = eth?.ipv4.method === 'manual' ? eth.ipv4.address : '192.168.1.42/24';
+  return {
+    devices: [
+      {
+        name: 'eth0',
+        type: 'ethernet',
+        state: 'connected',
+        active: eth?.name,
+        addresses: [ethAddr],
+        mac: 'dc:a6:32:00:11:22',
+      },
+      {
+        name: 'wlan0',
+        type: 'wifi',
+        state: 'connected',
+        active: wifi?.name,
+        addresses: ['192.168.1.43/24'],
+        mac: 'dc:a6:32:00:11:23',
+      },
+    ],
+    connections: n.connections,
+    connectivity: 'full',
+    hostname: n.hostname,
+    ...(n.pending
+      ? {
+          pending: {
+            deadline: new Date(n.pending.deadline).toISOString(),
+            changed: n.pending.changed,
+          },
+        }
+      : {}),
+    ...(process.env.MOCK_HOTSPOT === '1' ? { hotspot: { ssid: 'pwsgw-setup-4F2A' } } : {}),
+  };
+}
+
+function revertNet(state: MockState) {
+  const p = state.net.pending;
+  if (!p) return;
+  clearTimeout(p.timer);
+  state.net.connections = p.before.connections;
+  state.net.hostname = p.before.hostname;
+  state.net.pending = null;
+}
+
+function network(
+  state: MockState,
+  method: string,
+  path: string,
+  body: unknown,
+  res: ServerResponse,
+  now: number,
+) {
+  const n = state.net;
+  if (path === '/api/network' && method === 'GET') return send(res, 200, networkBody(state));
+  if (path === '/api/network/wifi' && method === 'GET') {
+    return send(res, 200, [
+      { ssid: 'HomeWiFi', signal: 82, secured: true },
+      { ssid: 'Neighbor 5G', signal: 47, secured: true },
+      { ssid: 'CoffeeShop Guest', signal: 33, secured: false },
+    ]);
+  }
+  if (path === '/api/network/apply' && method === 'POST') {
+    if (n.pending) return fail(res, 409, 'commit_in_progress');
+    if (!isObject(body) || !Array.isArray(body.connections)) {
+      return fail(res, 422, 'invalid_network', 'connections must be a list');
+    }
+    const before = {
+      connections: structuredClone(n.connections),
+      hostname: n.hostname,
+    };
+    const changed: string[] = [];
+    for (const c of body.connections as MockConnection[] & { wifi?: { psk?: string } }[]) {
+      if (typeof c.name !== 'string' || !c.name) {
+        return fail(res, 422, 'invalid_network', 'every connection needs a name');
+      }
+      if (c.ipv4?.method === 'manual') {
+        if (!c.ipv4.address || !/^\d+\.\d+\.\d+\.\d+\/\d+$/.test(c.ipv4.address)) {
+          return fail(
+            res,
+            422,
+            'invalid_network',
+            `${c.name}: address must look like 192.168.1.50/24`,
+          );
+        }
+      }
+      if (c.type === 'wifi' && c.wifi) {
+        // The passphrase is write only: take it and never keep or return it.
+        delete (c.wifi as { psk?: string }).psk;
+      }
+      const i = n.connections.findIndex((x) => x.name === c.name);
+      if (i >= 0) n.connections[i] = c;
+      else n.connections.push(c);
+      changed.push(c.name);
+    }
+    if (typeof body.hostname === 'string' && body.hostname) {
+      if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/i.test(body.hostname)) {
+        n.connections = before.connections;
+        return fail(res, 422, 'invalid_network', 'host name may only use letters, digits and -');
+      }
+      n.hostname = body.hostname;
+      changed.push('hostname');
+    }
+    const deadline = now + 90_000;
+    n.pending = {
+      deadline,
+      changed,
+      before,
+      timer: setTimeout(() => revertNet(state), 90_000),
+    };
+    return send(res, 200, {
+      applied: true,
+      confirm_deadline: new Date(deadline).toISOString(),
+      changed,
+    });
+  }
+  if (path === '/api/network/confirm' && method === 'POST') {
+    if (!n.pending) return fail(res, 409, 'nothing_pending');
+    if (now > n.pending.deadline) return fail(res, 410, 'deadline_passed');
+    clearTimeout(n.pending.timer);
+    n.pending = null;
+    return send(res, 200, { confirmed: true });
+  }
+  if (path === '/api/network/revert' && method === 'POST') {
+    revertNet(state);
+    return send(res, 200, { reverted: true });
+  }
+  const del = path.match(/^\/api\/network\/connections\/(.+)$/);
+  if (del && method === 'DELETE') {
+    const name = decodeURIComponent(del[1]);
+    const c = n.connections.find((x) => x.name === name);
+    if (!c) return fail(res, 404, 'not_found');
+    if (c.type === 'ethernet' || c.name === 'HomeWiFi') {
+      return fail(res, 409, 'in_use', `${name} is in use`);
+    }
+    n.connections = n.connections.filter((x) => x.name !== name);
+    return send(res, 200, { deleted: true });
   }
   return fail(res, 404, 'not_found', `No route for ${method} ${path}`);
 }

@@ -134,7 +134,8 @@ Written by the build job. Fields:
 | `version_number` | Integer `MAJOR*1000000 + MINOR*10000 + PATCH*100 + T` where `T` is `99` for a release and the rc number for `-rc.N`. Devices only install a higher number than the one they run. This blocks rollback to an older signed release. |
 | `created`, `expires` | RFC 3339 UTC. Devices reject a manifest past `expires` (90 days after build). This blocks a "freeze" attack where an attacker serves an old manifest forever to keep devices on a vulnerable release. |
 | `commit` | Git commit the release was built from. |
-| `artifacts[]` | `name`, `os`, `arch`, `sha256`, `size` for each bundle. |
+| `artifacts[]` | `name`, `kind`, `os`, `arch`, `sha256`, `size`, `url`, `chunk_size`, `chunks[]` (and `raw_size` for OS images) for each bundle. See `docs/spec/update-manifest-and-slots.md`. |
+| `os_version_number`, `rollback` | Optional: OS image revision, and the list of installed versions allowed to take a lower `version_number`. |
 | `images` | Container image references and digests, informational. |
 
 `manifest.json.sig` is the Ed25519 signature over the exact bytes of

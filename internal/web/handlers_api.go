@@ -582,10 +582,6 @@ func (s *Server) handleUplink(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.opts.Status.Update(r.Context()))
-}
-
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	n := 200
 	if v := r.URL.Query().Get("lines"); v != "" {

@@ -11,6 +11,11 @@ import type {
   I2cEnableResult,
   I2cStatus,
   ModemStatus,
+  NetworkApplyRequest,
+  NetworkApplyResult,
+  NetworkStatus,
+  UpdateSettings,
+  WifiNetwork,
   Radio,
   RadioUpdate,
   RelayStatus,
@@ -82,6 +87,20 @@ export const api = {
   time: (opts?: RequestOptions) => http.get<TimeStatus>('/api/time', opts),
   uplink: (opts?: RequestOptions) => http.get<Uplink>('/api/uplink', opts),
   update: (opts?: RequestOptions) => http.get<UpdateStatus>('/api/update', opts),
+  updates: {
+    check: () => http.post<{ started: boolean }>('/api/update/check'),
+    install: () => http.post<{ started: boolean }>('/api/update/apply'),
+    saveSettings: (s: UpdateSettings) => http.put<unknown>('/api/config/updates', s),
+  },
+  network: {
+    get: (opts?: RequestOptions) => http.get<NetworkStatus>('/api/network', opts),
+    apply: (req: NetworkApplyRequest) => http.post<NetworkApplyResult>('/api/network/apply', req),
+    confirm: () => http.post<{ confirmed: boolean }>('/api/network/confirm'),
+    revert: () => http.post<{ reverted: boolean }>('/api/network/revert'),
+    remove: (name: string) =>
+      http.delete<unknown>(`/api/network/connections/${encodeURIComponent(name)}`),
+    wifi: (opts?: RequestOptions) => http.get<WifiNetwork[]>('/api/network/wifi', opts),
+  },
   logs: (lines: number, opts?: RequestOptions) =>
     http.getText(`/api/logs?lines=${encodeURIComponent(String(lines))}`, opts),
   readings: (station: string, since: Date, opts?: RequestOptions) =>

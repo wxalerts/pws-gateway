@@ -40,6 +40,7 @@ separate from Weather Underground.
 | [History and charts](history-and-charts.md) | Local history at a user-set cadence (minimum 10 min), uPlot charts, CSV export. |
 | [LTE modem and GPS](lte-modem-and-gps.md) | ModemManager, gpsd and chrony; carrier, RSSI and fix in telemetry; LTE as failover WAN. |
 | [Network configuration (failback-safe)](network-configuration-failback-safe.md) | NetworkManager with 90 s commit-confirm, AP fallback hotspot. |
+| [Update manifest, slots and state machine](update-manifest-and-slots.md) | M6 implementation: manifest JSON, rejection codes, tryboot A/B, app slot. |
 | [Auto-update and rollback](auto-update-and-rollback.md) | A/B root, signed manifest from object storage, staged rollout, approved split build/sign CI. |
 | [Local web UI](local-web-ui.md) | React SPA served by the Go binary over HTTPS, admin password, Radios page, support bundle. |
 | [Home Assistant integration](home-assistant-integration.md) | mDNS discovery by the wxalerts-homeassistant integration, or MQTT discovery to a local broker. |
