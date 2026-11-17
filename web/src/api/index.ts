@@ -6,9 +6,11 @@ import type {
   Claim,
   Config,
   Credentials,
+  CwopConfig,
   Health,
   Radio,
   RadioUpdate,
+  RelayStatus,
   Reading,
   Session,
   SetupStatus,
@@ -51,6 +53,14 @@ export const api = {
       http.put<unknown>(`/api/config/${encodeURIComponent(section)}`, value),
     apply: () => http.post<ApplyResult>('/api/config/apply'),
     confirm: () => http.post<unknown>('/api/config/confirm'),
+  },
+  relay: {
+    get: (opts?: RequestOptions) => http.get<RelayStatus>('/api/relay', opts),
+    save: (cwop: CwopConfig) =>
+      http.put<unknown>('/api/config/relay', { cwop: { ...cwop, credential_file: '' } }),
+    setPasscode: (passcode: string) =>
+      http.put<{ passcode_set: boolean }>('/api/relay/cwop/passcode', { passcode }),
+    clearPasscode: () => http.delete<{ passcode_set: boolean }>('/api/relay/cwop/passcode'),
   },
   claim: {
     get: (opts?: RequestOptions) => http.get<Claim>('/api/claim', opts),

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/wxalerts/pws-gateway/internal/model"
+	"github.com/wxalerts/pws-gateway/internal/relay/cwop"
 )
 
 // SchemaVersion is the version this build writes. Load migrates older files.
@@ -59,6 +60,7 @@ type Config struct {
 	Network       Network            `json:"network"`
 	Updates       Updates            `json:"updates"`
 	HomeAssistant HomeAssistant      `json:"homeassistant"`
+	Relay         Relay              `json:"relay"`
 }
 
 // Web configures the local HTTPS server.
@@ -196,6 +198,12 @@ type HomeAssistant struct {
 	BrokerURL string `json:"broker_url"`
 }
 
+// Relay configures third party relays. Each destination has its own relay
+// owner (see docs/relay/README.md): the Pi sends only for owner "device".
+type Relay struct {
+	CWOP cwop.Config `json:"cwop"`
+}
+
 // Defaults returns the configuration a fresh install starts from.
 func Defaults() Config {
 	return Config{
@@ -217,7 +225,7 @@ func Defaults() Config {
 }
 
 // Sections lists the valid section names in file order.
-var Sections = []string{"web", "radios", "stations", "uplink", "history", "network", "updates", "homeassistant"}
+var Sections = []string{"web", "radios", "stations", "uplink", "history", "network", "updates", "homeassistant", "relay"}
 
 // ValidationError collects every problem found so the UI can show them all.
 type ValidationError struct {
@@ -252,6 +260,7 @@ func (c *Config) Validate() error {
 	c.validateUplink(&ve)
 	c.validateNetwork(&ve)
 	c.validateUpdates(&ve)
+	c.validateRelay(&ve)
 
 	if len(ve.Problems) > 0 {
 		return &ve
@@ -355,6 +364,18 @@ func (c *Config) validateUpdates(ve *ValidationError) {
 		if err := validateBrokerURL(c.HomeAssistant.BrokerURL); err != nil {
 			ve.add("homeassistant.broker_url: %v", err)
 		}
+	}
+}
+
+func (c *Config) validateRelay(ve *ValidationError) {
+	for _, p := range c.Relay.CWOP.Problems() {
+		ve.add("relay.cwop: %s (%s)", p.Msg, p.Code)
+	}
+	if strings.ContainsAny(c.Relay.CWOP.CredentialFile, "\x00") {
+		ve.add("relay.cwop.credential_file contains NUL")
+	}
+	if s := c.Relay.CWOP.Station; s != "" && !reKey.MatchString(s) {
+		ve.add("relay.cwop.station %q is not a valid station key", s)
 	}
 }
 

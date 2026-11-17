@@ -157,3 +157,44 @@ export interface Version {
   commit: string;
   build_date: string;
 }
+
+export type RelayOwner = 'device' | 'server' | '';
+
+export interface RelayProblem {
+  code: string;
+  message: string;
+}
+
+export interface RelayHealth {
+  last_attempt: string | null;
+  last_success: string | null;
+  last_error: { code: string; message: string; at: string } | null;
+  failures: number;
+}
+
+export type RelayState =
+  'off' | 'server' | 'invalid' | 'waiting_for_time' | 'ok' | 'error' | 'idle';
+
+export interface CwopConfig {
+  owner: RelayOwner;
+  station: string;
+  id: string;
+  server: string;
+  position_opt_in: boolean;
+  lat: number;
+  lon: number;
+}
+
+export interface RelayStatus {
+  cwop: {
+    config: CwopConfig;
+    needs_passcode: boolean;
+    status: {
+      state: RelayState;
+      problems: RelayProblem[];
+      passcode_set: boolean;
+      health: RelayHealth;
+      next_attempt: string | null;
+    };
+  };
+}

@@ -186,6 +186,8 @@ func (c *Config) applySection(section string, raw json.RawMessage) error {
 		target = &c.Updates
 	case "homeassistant":
 		target = &c.HomeAssistant
+	case "relay":
+		target = &c.Relay
 	default:
 		return fmt.Errorf("%w: %q", ErrUnknownSection, section)
 	}

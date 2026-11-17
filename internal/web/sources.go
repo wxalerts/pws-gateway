@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/wxalerts/pws-gateway/internal/relay"
+	"github.com/wxalerts/pws-gateway/internal/relay/cwop"
 )
 
 // StationInfo is what the collector knows about one discovered station. The
@@ -160,3 +163,25 @@ func (NopClaim) ClaimCancel() ClaimStatus { return ClaimStatus{State: "unclaimed
 
 // ClaimUnlink implements ClaimSource.
 func (NopClaim) ClaimUnlink() error { return nil }
+
+// RelaySource reports and edits the device-owned relays. The app adapts the
+// CWOP runner to it. It never exposes a passcode, only whether one is set.
+type RelaySource interface {
+	CWOP(ctx context.Context) cwop.Status
+	SetCWOPPasscode(pass string) error
+	ClearCWOPPasscode() error
+}
+
+// NopRelay is the default RelaySource: nothing is relayed.
+type NopRelay struct{}
+
+// CWOP implements RelaySource.
+func (NopRelay) CWOP(context.Context) cwop.Status {
+	return cwop.Status{State: "off", Problems: []relay.Problem{}}
+}
+
+// SetCWOPPasscode implements RelaySource.
+func (NopRelay) SetCWOPPasscode(string) error { return errors.New("relay is not available") }
+
+// ClearCWOPPasscode implements RelaySource.
+func (NopRelay) ClearCWOPPasscode() error { return nil }

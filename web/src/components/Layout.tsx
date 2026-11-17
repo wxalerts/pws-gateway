@@ -10,6 +10,7 @@ const NAV: { to: string; label: string }[] = [
   { to: '/radios', label: 'Radios' },
   { to: '/account', label: 'WxAlerts account' },
   { to: '/uplink', label: 'Uplink' },
+  { to: '/relay', label: 'CWOP relay' },
   { to: '/updates', label: 'Updates' },
   { to: '/network', label: 'Network' },
   { to: '/home-assistant', label: 'Home Assistant' },
