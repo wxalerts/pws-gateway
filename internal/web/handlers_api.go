@@ -69,11 +69,11 @@ type stationView struct {
 	Key       string  `json:"key"`
 	Model     string  `json:"model"`
 	ID        int     `json:"id"`
-	Channel   *int    `json:"channel"`
+	Channel   *string `json:"channel"`
 	LastSeen  string  `json:"last_seen"`
 	RSSIdB    float64 `json:"rssi_db"`
 	SNRdB     float64 `json:"snr_db"`
-	BatteryOK bool    `json:"battery_ok"`
+	BatteryOK *bool   `json:"battery_ok"`
 	// Fields is the effective selected set: the model default with the
 	// owner's overrides applied (config.Station.EffectiveFields). For a
 	// station that is not selected it shows what would be used if it were.
@@ -92,6 +92,15 @@ type stationView struct {
 	WindHeightM   *float64 `json:"wind_height_m"`
 }
 
+// channelPtr maps an empty channel to JSON null and keeps the rtl_433 text
+// otherwise, so Acurite letters (A, B, C) reach the UI unchanged.
+func channelPtr(ch string) *string {
+	if ch == "" {
+		return nil
+	}
+	return &ch
+}
+
 func nonNil(s []string) []string {
 	if s == nil {
 		return []string{}
@@ -101,7 +110,7 @@ func nonNil(s []string) []string {
 
 func mergeStation(info StationInfo, cfg map[string]config.Station) stationView {
 	v := stationView{
-		Key: info.Key, Model: info.Model, ID: info.ID, Channel: info.Channel,
+		Key: info.Key, Model: info.Model, ID: info.ID, Channel: channelPtr(info.Channel),
 		LastSeen: info.LastSeen.UTC().Format(time.RFC3339), RSSIdB: info.RSSIdB, SNRdB: info.SNRdB,
 		BatteryOK: info.BatteryOK, NSightings: info.NSightings,
 	}

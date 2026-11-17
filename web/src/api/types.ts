@@ -52,11 +52,12 @@ export interface Station {
   key: string;
   model: string;
   id: number;
-  channel: number | null;
+  channel: string | null;
   last_seen: string;
   rssi_db: number;
   snr_db: number;
-  battery_ok: boolean;
+  /** null when the station never reported a battery flag. */
+  battery_ok: boolean | null;
   /** Canonical fields that are stored and uploaded (or would be, if selected). */
   fields: string[];
   /** Every canonical field this station has reported. */

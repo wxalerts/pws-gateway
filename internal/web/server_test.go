@@ -348,10 +348,32 @@ func TestHealth(t *testing.T) {
 	}
 }
 
-func TestStationsMergeAndPut(t *testing.T) {
-	ch := 1
+func TestStationChannelAndBatteryJSON(t *testing.T) {
+	ok := true
 	e := newEnv(t, nil,
-		StationInfo{Key: "Acurite-5n1/1/12", Model: "Acurite-5n1", ID: 12, Channel: &ch, LastSeen: time.Unix(0, 0), Fields: []string{"temp_c"}, NSightings: 7},
+		StationInfo{Key: "Acurite-5n1:4026:A", Model: "Acurite-5n1", ID: 4026, Channel: "A", BatteryOK: &ok},
+		StationInfo{Key: "Fine:2:", Model: "Fine", ID: 2},
+	)
+	c := e.login()
+	var list []map[string]any
+	e.do("GET", "/api/stations", "", c).json(&list)
+	byKey := map[string]map[string]any{}
+	for _, v := range list {
+		byKey[v["key"].(string)] = v
+	}
+	a, f := byKey["Acurite-5n1:4026:A"], byKey["Fine:2:"]
+	if a["channel"] != "A" || a["battery_ok"] != true {
+		t.Errorf("acurite = %v", a)
+	}
+	if f["channel"] != nil || f["battery_ok"] != nil {
+		t.Errorf("station with no channel or battery flag must be null, got %v", f)
+	}
+}
+
+func TestStationsMergeAndPut(t *testing.T) {
+	ch := "A"
+	e := newEnv(t, nil,
+		StationInfo{Key: "Acurite-5n1/1/12", Model: "Acurite-5n1", ID: 12, Channel: ch, LastSeen: time.Unix(0, 0), Fields: []string{"temp_c"}, NSightings: 7},
 		StationInfo{Key: "Fine/2", Model: "Fine", ID: 2},
 	)
 	c := e.login()

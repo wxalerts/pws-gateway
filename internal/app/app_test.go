@@ -2,9 +2,13 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,8 +70,11 @@ func TestReplayFeedsAdapters(t *testing.T) {
 	if found == nil {
 		t.Fatalf("station %s not discovered", keyAcu)
 	}
-	if found.Model != "Acurite-5n1" || found.ID != 4026 || found.Channel == nil || *found.Channel != 1 {
+	if found.Model != "Acurite-5n1" || found.ID != 4026 || found.Channel != "A" {
 		t.Errorf("unexpected station info: %+v", *found)
+	}
+	if found.BatteryOK == nil || !*found.BatteryOK {
+		t.Errorf("5n1 reports battery_ok=1, got %v", found.BatteryOK)
 	}
 	if found.NSightings == 0 || len(found.Fields) == 0 {
 		t.Errorf("sightings and fields not filled: %+v", *found)
@@ -89,17 +96,6 @@ func TestReplayFeedsAdapters(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("Run did not stop")
-	}
-}
-
-func TestChannelNumber(t *testing.T) {
-	for in, want := range map[string]int{"A": 1, "b": 2, "3": 3} {
-		if got := channelNumber(in); got == nil || *got != want {
-			t.Errorf("channelNumber(%q) = %v, want %d", in, got, want)
-		}
-	}
-	if channelNumber("") != nil {
-		t.Error("empty channel should be nil")
 	}
 }
 
@@ -247,4 +243,48 @@ func TestSelectionFollowsLiveConfig(t *testing.T) {
 	if _, fields := a.selection(st); !slices.Equal(fields, []string{"temp_c", "battery_ok"}) {
 		t.Fatalf("fields = %v", fields)
 	}
+}
+
+// A decoder line without battery_ok must reach the API as unknown, not OK.
+func TestStationWithoutBatteryFlagIsUnknown(t *testing.T) {
+	cs, dir := newConfig(t)
+	// The recorded 5n1 line with battery_ok removed and a different id.
+	var lines strings.Builder
+	for i := 0; i < 6; i++ {
+		fmt.Fprintf(&lines, `{"time" : "2026-11-16T16:52:%02d.393158", "protocol" : 40, "model" : "Acurite-5n1", `+
+			`"message_type" : 49, "id" : 77, "channel" : "B", "sequence_num" : %d, "wind_avg_km_h" : 8.450, `+
+			`"wind_dir_deg" : 135.000, "rain_in" : 38.810, "mic" : "CHECKSUM", "mod" : "ASK", `+
+			`"freq" : 433.934, "rssi" : -0.102, "snr" : 13.873, "noise" : -13.975}`+"\n", 3+i*8, i%3)
+	}
+	file := filepath.Join(t.TempDir(), "nobattery.jsonl")
+	if err := os.WriteFile(file, []byte(lines.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a, err := New(Deps{
+		DataDir: dir, Config: cs, Platform: mock.New(), Logger: quietLogger(), ReplayFile: file,
+		Now: func() time.Time { return time.Date(2026, 11, 16, 17, 20, 0, 0, time.UTC) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- a.Run(ctx) }()
+	defer func() { cancel(); <-done }()
+
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		sts, err := a.Stations().Stations(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(sts) == 1 {
+			if sts[0].BatteryOK != nil || sts[0].Channel != "B" {
+				t.Fatalf("want nil battery and channel B, got %+v", sts[0])
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("station not discovered")
 }

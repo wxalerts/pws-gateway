@@ -32,6 +32,11 @@ interface StationsTableProps {
   busyKey?: string | null;
 }
 
+function BatteryBadge({ ok }: { ok: boolean | null }) {
+  if (ok === null || ok === undefined) return <Badge tone="neutral">Unknown</Badge>;
+  return <Badge tone={ok ? 'ok' : 'warn'}>{ok ? 'OK' : 'Low'}</Badge>;
+}
+
 /** Discovered stations. Exported on its own so it can be tested without the page. */
 export function StationsTable({ stations, onSelect, onEdit, busyKey }: StationsTableProps) {
   const columns: Column<Station>[] = [
@@ -73,9 +78,7 @@ export function StationsTable({ stations, onSelect, onEdit, busyKey }: StationsT
     {
       key: 'battery',
       header: 'Battery',
-      render: (s) => (
-        <Badge tone={s.battery_ok ? 'ok' : 'warn'}>{s.battery_ok ? 'OK' : 'Low'}</Badge>
-      ),
+      render: (s) => <BatteryBadge ok={s.battery_ok} />,
     },
     {
       key: 'fields',

@@ -30,41 +30,19 @@ func (s stationSource) Stations(context.Context) ([]web.StationInfo, error) {
 			Key:     st.Key,
 			Model:   st.Model,
 			ID:      id,
-			Channel: channelNumber(st.Channel),
+			Channel: strings.TrimSpace(st.Channel),
 			// LastSeen is the pipeline's stamp, never the wall clock here.
 			LastSeen: st.LastSeen,
 			RSSIdB:   st.LastSignal.RSSI,
 			SNRdB:    st.LastSignal.SNR,
-			// A device that never reported a battery flag is shown as fine
-			// rather than raising a false low battery warning.
-			BatteryOK:  st.BatteryOK == nil || *st.BatteryOK,
+			// nil means the device never reported a battery flag.
+			BatteryOK:  st.BatteryOK,
 			Fields:     st.Fields,
 			RawFields:  st.RawFields,
 			NSightings: st.Sightings,
 		})
 	}
 	return out, nil
-}
-
-// channelNumber maps an rtl_433 channel to the number the UI shows. Numeric
-// channels pass through; the letter channels used by Acurite (A, B, C) become
-// 1, 2, 3. The station key keeps the original text, so this is display only.
-func channelNumber(ch string) *int {
-	ch = strings.TrimSpace(ch)
-	if ch == "" {
-		return nil
-	}
-	if n, err := strconv.Atoi(ch); err == nil {
-		return &n
-	}
-	if len(ch) == 1 {
-		c := ch[0] &^ 0x20 // upper case
-		if c >= 'A' && c <= 'Z' {
-			n := int(c-'A') + 1
-			return &n
-		}
-	}
-	return nil
 }
 
 // readingsSource adapts the pipeline's recent readings to web.ReadingsSource.
