@@ -42,6 +42,7 @@ type Hardware struct {
 
 	mmMu  sync.Mutex
 	mmBus *modemmanager.SystemBus
+	mmRd  *modemmanager.Reader
 }
 
 func newHardware(a *Adapter) *Hardware {
@@ -65,14 +66,17 @@ func (h *Hardware) systemModem(ctx context.Context) (*modemmanager.Info, error) 
 			return nil, platform.ErrUnsupported
 		}
 		h.mmBus = b
+		h.mmRd = &modemmanager.Reader{Bus: b, EnableSignal: func(ctx context.Context) error {
+			return h.Priv(ctx, priv.ActModemSignalPoll)
+		}}
 	}
-	bus := h.mmBus
+	rd := h.mmRd
 	h.mmMu.Unlock()
-	info, err := (&modemmanager.Reader{Bus: bus}).Read(ctx)
+	info, err := rd.Read(ctx)
 	if errors.Is(err, modemmanager.ErrNoManager) {
 		h.mmMu.Lock()
 		_ = h.mmBus.Close()
-		h.mmBus = nil
+		h.mmBus, h.mmRd = nil, nil
 		h.mmMu.Unlock()
 		return nil, platform.ErrUnsupported
 	}
@@ -241,6 +245,8 @@ func applyDirect(ctx context.Context, h *Hardware, act priv.Action) error {
 		return priv.Executor.SetI2C(ex, true)
 	case priv.ActI2COff:
 		return priv.Executor.SetI2C(ex, false)
+	case priv.ActModemSignalPoll:
+		return priv.Executor.Do(ex, ctx, act)
 	default:
 		return priv.Executor.DisableFakeHwclock(ex, ctx)
 	}

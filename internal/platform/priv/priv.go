@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-// Actions. This list is the whole interface.
+// Action names one privileged operation. This list is the whole interface.
 type Action string
 
 // The allowed actions.
@@ -31,9 +31,12 @@ const (
 	ActI2COn              Action = "i2c_enable"
 	ActI2COff             Action = "i2c_disable"
 	ActFakeHwclockDisable Action = "fake_hwclock_disable"
+	// ActModemSignalPoll turns on ModemManager signal polling, which needs
+	// an authorization the service account does not have.
+	ActModemSignalPoll Action = "modem_signal_poll"
 )
 
-var allowed = map[Action]bool{ActI2COn: true, ActI2COff: true, ActFakeHwclockDisable: true}
+var allowed = map[Action]bool{ActI2COn: true, ActI2COff: true, ActFakeHwclockDisable: true, ActModemSignalPoll: true}
 
 // Request and Result are the two files exchanged through the directory.
 type Request struct {
@@ -155,7 +158,8 @@ func Apply(ctx context.Context, dir string, ex Executor) error {
 		return mErr
 	}
 	tmp := filepath.Join(dir, resultFile+".tmp")
-	if err := os.WriteFile(tmp, rb, 0o640); err != nil {
+	// The unprivileged daemon must be able to read the result.
+	if err := os.WriteFile(tmp, rb, 0o644); err != nil { //nolint:gosec // world readable on purpose, holds no secret
 		return err
 	}
 	if err := os.Rename(tmp, filepath.Join(dir, resultFile)); err != nil {
@@ -165,6 +169,9 @@ func Apply(ctx context.Context, dir string, ex Executor) error {
 	return runErr
 }
 
+// Do runs one allowed action.
+func (ex Executor) Do(ctx context.Context, a Action) error { return ex.do(ctx, a) }
+
 func (ex Executor) do(ctx context.Context, a Action) error {
 	switch a {
 	case ActI2COn:
@@ -173,6 +180,12 @@ func (ex Executor) do(ctx context.Context, a Action) error {
 		return ex.SetI2C(false)
 	case ActFakeHwclockDisable:
 		return ex.DisableFakeHwclock(ctx)
+	case ActModemSignalPoll:
+		if ex.Run == nil {
+			return errors.New("no command runner")
+		}
+		_, err := ex.Run(ctx, "mmcli", "-m", "any", "--signal-setup=60")
+		return err
 	}
 	return fmt.Errorf("unknown action %q", a)
 }

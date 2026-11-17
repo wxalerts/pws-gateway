@@ -136,3 +136,24 @@ func TestTimeSyncCarriesChronyRef(t *testing.T) {
 	}
 	_ = time.Now
 }
+
+func TestChronyQueriedEvenWhenPidFileIsHidden(t *testing.T) {
+	// The service account cannot see /run/chrony, so the pid file is no proof
+	// chrony is absent. The chronyc binary being installed is enough to ask.
+	a := fakeAdapter(t, nil, "")
+	if err := os.MkdirAll(filepath.Join(a.FS.Root, "usr", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(a.FS.Root, "usr", "bin", "chronyc"), nil, 0o755)
+	a.KernelTime = func() (KernelTime, error) { return KernelTime{Synced: true}, nil }
+	a.HW.Run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		if args[1] == "sources" {
+			return []byte("#,*,LTE,10,6,377,2,0.1,0.1,0.5\n"), nil
+		}
+		return nil, errors.New("no tracking")
+	}
+	ts, err := a.TimeSync(context.Background())
+	if err != nil || ts.Ref != "lte" {
+		t.Fatalf("ts=%+v err=%v", ts, err)
+	}
+}

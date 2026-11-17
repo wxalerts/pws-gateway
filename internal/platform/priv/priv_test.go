@@ -122,6 +122,16 @@ func TestSubmitTimesOutWithoutHelper(t *testing.T) {
 	}
 }
 
+func TestModemSignalPollRunsMmcli(t *testing.T) {
+	ex, _, calls := executor(t)
+	if err := ex.do(context.Background(), ActModemSignalPoll); err != nil {
+		t.Fatal(err)
+	}
+	if len(*calls) != 1 || (*calls)[0] != "mmcli -m any --signal-setup=60" {
+		t.Errorf("calls = %v", *calls)
+	}
+}
+
 func TestFakeHwclockDisableRunsSystemctl(t *testing.T) {
 	ex, _, calls := executor(t)
 	if err := ex.do(context.Background(), ActFakeHwclockDisable); err != nil {

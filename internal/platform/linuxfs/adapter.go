@@ -142,7 +142,7 @@ func (a *Adapter) TimeSync(ctx context.Context) (platform.TimeSync, error) {
 	case a.FS.ChronyRunning():
 		ts.Source = "chrony"
 	}
-	if a.FS.ChronyRunning() && a.HW != nil && a.HW.Run != nil {
+	if (a.FS.ChronyRunning() || a.FS.Exists("usr/bin/chronyc")) && a.HW != nil && a.HW.Run != nil {
 		qctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		if cs, err := chrony.Query(qctx, a.HW.Run); err == nil {
 			ts.Ref, ts.LastSync = cs.Ref, cs.LastSync

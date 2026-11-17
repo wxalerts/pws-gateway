@@ -21,7 +21,7 @@ const (
 
 // LTESocket is the chronyd "refclock SOCK" path the LTE network time is
 // written to; deploy/chrony/pwsgw.conf declares the same path.
-const LTESocket = "/run/chrony/pwsgw-lte.sock"
+const LTESocket = "/run/pwsgw-chrony/lte.sock"
 
 // setupHardware builds the boot-change machine. The current I2C setting is
 // read from the platform; a platform that cannot tell starts as disabled.

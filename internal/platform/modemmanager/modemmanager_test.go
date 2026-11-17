@@ -107,6 +107,19 @@ func TestSetupRefusedLeavesRSSIEmpty(t *testing.T) {
 	}
 }
 
+func TestRefusedSetupFallsBackToTheHelperOnce(t *testing.T) {
+	b := registeredLTE()
+	b.props[ifaceSignal]["Rate"] = dbus.MakeVariant(uint32(0))
+	b.setupE = errors.New("not authorized")
+	n := 0
+	r := &Reader{Bus: b, EnableSignal: func(context.Context) error { n++; return nil }}
+	_, _ = r.Read(context.Background())
+	_, _ = r.Read(context.Background())
+	if n != 1 {
+		t.Fatalf("helper called %d times, want once", n)
+	}
+}
+
 func TestVocabulary(t *testing.T) {
 	if regName(5) != "roaming" || regName(2) != "searching" || regName(3) != "denied" || techName(1<<15) != "nr" || techName(1<<5) != "umts" || stateName(11) != "connected" {
 		t.Error("vocabulary mapping is wrong")

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/godbus/dbus/v5"
@@ -52,6 +53,12 @@ type Info struct {
 // Reader queries one Bus.
 type Reader struct {
 	Bus Bus
+	// EnableSignal is tried once, when the service account is not allowed
+	// to call Signal.Setup itself. The daemon points it at the root helper.
+	EnableSignal func(ctx context.Context) error
+
+	mu    sync.Mutex
+	tried bool
 }
 
 // Read returns the first modem, or (nil, nil) when there is none.
@@ -101,7 +108,13 @@ func (r *Reader) rssi(ctx context.Context, p dbus.ObjectPath, tech string) *floa
 	}
 	if u32(sp["Rate"]) == 0 {
 		if _, err := r.Bus.Call(ctx, p, ifaceSignal, "Setup", uint32(signalPeriod)); err != nil {
-			return nil
+			r.mu.Lock()
+			first := !r.tried
+			r.tried = true
+			r.mu.Unlock()
+			if first && r.EnableSignal != nil {
+				_ = r.EnableSignal(ctx) //nolint:errcheck // without it there is simply no dBm figure
+			}
 		}
 		return nil // the first sample arrives after one period
 	}
