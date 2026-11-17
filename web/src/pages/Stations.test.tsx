@@ -51,7 +51,7 @@ describe('StationsTable', () => {
         key: 'Acurite-5n1:0x0C4A:A',
         model: 'Acurite-5n1',
         id: 3146,
-        channel: 1,
+        channel: 'A',
         rssi_db: -88.2,
         snr_db: 5.1,
         battery_ok: false,
@@ -76,9 +76,17 @@ describe('StationsTable', () => {
 
     const second = within(rows[1]);
     expect(second.getByRole('link', { name: 'Front yard' })).toBeInTheDocument();
-    expect(second.getByText('Acurite-5n1 id 3146 ch 1')).toBeInTheDocument();
+    expect(second.getByText('Acurite-5n1 id 3146 ch A')).toBeInTheDocument();
     expect(second.getByText('Low')).toBeInTheDocument();
     expect(second.getByText('T R')).toBeInTheDocument();
+  });
+
+  it('shows unknown battery when the station reports no flag', () => {
+    renderTable([station({ battery_ok: null })]);
+    const row = within(screen.getAllByRole('row')[1]);
+    expect(row.getByText('Unknown')).toBeInTheDocument();
+    expect(row.queryByText('OK')).toBeNull();
+    expect(row.queryByText('Low')).toBeNull();
   });
 
   it('marks the selected station and hides its Select button', () => {

@@ -6,11 +6,11 @@ export interface MockStation {
   key: string;
   model: string;
   id: number;
-  channel: number | null;
+  channel: string | null;
   last_seen: string;
   rssi_db: number;
   snr_db: number;
-  battery_ok: boolean;
+  battery_ok: boolean | null;
   /** Effective selected set. Derived from the three members below. */
   fields: string[];
   fields_available: string[];
@@ -158,7 +158,7 @@ export function createState(): MockState {
           key: 'Acurite-5n1:0x0C4A:A',
           model: 'Acurite-5n1',
           id: 3146,
-          channel: 1,
+          channel: 'A',
           last_seen: minutesAgo(1.1),
           rssi_db: -78.6,
           snr_db: 12.2,
@@ -181,7 +181,7 @@ export function createState(): MockState {
           key: 'Oregon-THGR122N:0x8A:1',
           model: 'Oregon-THGR122N',
           id: 138,
-          channel: 1,
+          channel: 'A',
           last_seen: minutesAgo(14),
           rssi_db: -89.4,
           snr_db: 6.8,

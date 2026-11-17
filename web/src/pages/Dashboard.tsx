@@ -269,8 +269,20 @@ export function DashboardPage() {
                     />
                     <Stat
                       label="Battery"
-                      value={selected.battery_ok ? 'OK' : 'Low'}
-                      tone={selected.battery_ok ? 'ok' : 'warn'}
+                      value={
+                        selected.battery_ok === null || selected.battery_ok === undefined
+                          ? 'Unknown'
+                          : selected.battery_ok
+                            ? 'OK'
+                            : 'Low'
+                      }
+                      tone={
+                        selected.battery_ok === null || selected.battery_ok === undefined
+                          ? undefined
+                          : selected.battery_ok
+                            ? 'ok'
+                            : 'warn'
+                      }
                     />
                   </StatGrid>
                   <p>

@@ -9,14 +9,15 @@ import (
 // StationInfo is what the collector knows about one discovered station. The
 // web layer merges it with the owner's annotations from the config.
 type StationInfo struct {
-	Key       string
-	Model     string
-	ID        int
-	Channel   *int
-	LastSeen  time.Time
-	RSSIdB    float64
-	SNRdB     float64
-	BatteryOK bool
+	Key      string
+	Model    string
+	ID       int
+	Channel  string
+	LastSeen time.Time
+	RSSIdB   float64
+	SNRdB    float64
+	// BatteryOK is nil when the station never reported a battery flag.
+	BatteryOK *bool
 	// Fields lists the canonical fields seen, RawFields the unmapped decoder
 	// field names seen.
 	Fields     []string
