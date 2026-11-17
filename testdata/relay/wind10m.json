@@ -1,0 +1,48 @@
+{
+  "description": "10 m wind. v10 = v * ln(10/0.03) / ln(z/0.03), rounded to 0.01 m/s. Absent (null) without a height or when z <= 0.03 m.",
+  "tolerance_ms": 0.01,
+  "cases": [
+    {
+      "name": "acceptance: 2.1 m/s at 4.5 m",
+      "speed_ms": 2.1,
+      "height_m": 4.5,
+      "expected_ms": 2.43
+    },
+    {
+      "name": "already at 10 m",
+      "speed_ms": 3.0,
+      "height_m": 10.0,
+      "expected_ms": 3.0
+    },
+    {
+      "name": "anemometer at 2 m",
+      "speed_ms": 5.0,
+      "height_m": 2.0,
+      "expected_ms": 6.92
+    },
+    {
+      "name": "mast at 15 m",
+      "speed_ms": 8.0,
+      "height_m": 15.0,
+      "expected_ms": 7.48
+    },
+    {
+      "name": "calm",
+      "speed_ms": 0.0,
+      "height_m": 4.5,
+      "expected_ms": 0.0
+    },
+    {
+      "name": "no height",
+      "speed_ms": 2.1,
+      "height_m": null,
+      "expected_ms": null
+    },
+    {
+      "name": "height at roughness length",
+      "speed_ms": 2.1,
+      "height_m": 0.03,
+      "expected_ms": null
+    }
+  ]
+}

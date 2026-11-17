@@ -1,0 +1,288 @@
+{
+  "description": "A full obs message (contract example shape), the relay inputs the plugin owns, and the exact APRS-IS packet line (without the trailing CR LF). The first bucket's first station is relayed. Time is bucket start plus interval_s. Wind is normalised to 10 m and rounded to 0.01 m/s before conversion to whole mph. Rain totals are the plugin's own rolling sums in mm.",
+  "software_tag": "eWxPG",
+  "login": {
+    "id": "CW1234",
+    "software": "pws-gateway",
+    "version": "0.1.0",
+    "expected_line": "user CW1234 pass -1 vers pws-gateway 0.1.0"
+  },
+  "cases": [
+    {
+      "name": "contract sample obs bucket",
+      "obs": {
+        "v": 0,
+        "device_id": "d_8f3a",
+        "seq": 1234,
+        "sent": "2026-11-16T14:15:03Z",
+        "interval_s": 300,
+        "buckets": [
+          {
+            "start": "2026-11-16T14:00:00Z",
+            "stations": [
+              {
+                "key": "Acurite-5n1:1234:A",
+                "n": 7,
+                "meta": {
+                  "alt_m": 31.0,
+                  "wind_height_m": 4.5
+                },
+                "f": {
+                  "temp_c": {
+                    "avg": 18.2,
+                    "min": 17.9,
+                    "max": 18.6
+                  },
+                  "humidity_pct": {
+                    "avg": 64
+                  },
+                  "pressure_station_hpa": {
+                    "avg": 1008.3
+                  },
+                  "wind_speed_ms": {
+                    "avg": 2.1
+                  },
+                  "wind_gust_ms": {
+                    "max": 4.8
+                  },
+                  "wind_dir_deg": {
+                    "vec": 212
+                  },
+                  "rain_mm": {
+                    "sum": 0.0
+                  },
+                  "battery_ok": {
+                    "last": 1
+                  }
+                },
+                "sig": {
+                  "rssi_db": -61.2,
+                  "snr_db": 19.4
+                },
+                "raw": {}
+              }
+            ]
+          }
+        ]
+      },
+      "config": {
+        "id": "CW1234",
+        "lat": 39.1234,
+        "lon": -94.5678
+      },
+      "rain": {
+        "last_1h_mm": 0.0,
+        "last_24h_mm": 2.54,
+        "since_midnight_mm": 1.016
+      },
+      "expected_packet": "CW1234>APRS,TCPIP*:@161405z3907.40N/09434.07W_212/005g012t065r000p010P004h64b10120eWxPG"
+    },
+    {
+      "name": "freezing, 100 percent humidity, north wind, southern and eastern hemisphere",
+      "obs": {
+        "v": 0,
+        "device_id": "d_8f3a",
+        "seq": 1234,
+        "sent": "2026-11-16T14:15:03Z",
+        "interval_s": 300,
+        "buckets": [
+          {
+            "start": "2026-11-16T14:00:00Z",
+            "stations": [
+              {
+                "key": "Acurite-5n1:1234:A",
+                "n": 7,
+                "meta": {
+                  "alt_m": 31.0,
+                  "wind_height_m": 4.5
+                },
+                "f": {
+                  "temp_c": {
+                    "avg": -4.6,
+                    "min": 17.9,
+                    "max": 18.6
+                  },
+                  "humidity_pct": {
+                    "avg": 100
+                  },
+                  "pressure_station_hpa": {
+                    "avg": 990.7
+                  },
+                  "wind_speed_ms": {
+                    "avg": 2.1
+                  },
+                  "wind_gust_ms": {
+                    "max": 4.8
+                  },
+                  "wind_dir_deg": {
+                    "vec": 0.2
+                  },
+                  "rain_mm": {
+                    "sum": 0.0
+                  },
+                  "battery_ok": {
+                    "last": 1
+                  }
+                },
+                "sig": {
+                  "rssi_db": -61.2,
+                  "snr_db": 19.4
+                },
+                "raw": {}
+              }
+            ]
+          }
+        ]
+      },
+      "config": {
+        "id": "CW0042",
+        "lat": -33.8688,
+        "lon": 151.2093
+      },
+      "rain": {
+        "last_1h_mm": 0.254,
+        "last_24h_mm": 12.7,
+        "since_midnight_mm": 5.08
+      },
+      "expected_packet": "CW0042>APRS,TCPIP*:@161405z3352.13S/15112.56E_360/005g012t024r001p050P020h00b09946eWxPG"
+    },
+    {
+      "name": "missing pressure, humidity, gust and mounting height, rain unknown",
+      "obs": {
+        "v": 0,
+        "device_id": "d_8f3a",
+        "seq": 1234,
+        "sent": "2026-11-16T14:15:03Z",
+        "interval_s": 300,
+        "buckets": [
+          {
+            "start": "2026-11-16T14:00:00Z",
+            "stations": [
+              {
+                "key": "Acurite-5n1:1234:A",
+                "n": 7,
+                "f": {
+                  "temp_c": {
+                    "avg": 18.2,
+                    "min": 17.9,
+                    "max": 18.6
+                  },
+                  "wind_speed_ms": {
+                    "avg": 2.1
+                  },
+                  "wind_dir_deg": {
+                    "vec": 212
+                  },
+                  "rain_mm": {
+                    "sum": 0.0
+                  },
+                  "battery_ok": {
+                    "last": 1
+                  }
+                },
+                "sig": {
+                  "rssi_db": -61.2,
+                  "snr_db": 19.4
+                },
+                "raw": {}
+              }
+            ]
+          }
+        ]
+      },
+      "config": {
+        "id": "CW1234",
+        "lat": 39.1234,
+        "lon": -94.5678
+      },
+      "rain": null,
+      "expected_packet": "CW1234>APRS,TCPIP*:@161405z3907.40N/09434.07W_212/...g...t065eWxPG"
+    },
+    {
+      "name": "bucket end crosses midnight into the next day",
+      "obs": {
+        "v": 0,
+        "device_id": "d_8f3a",
+        "seq": 1234,
+        "sent": "2026-11-16T14:15:03Z",
+        "interval_s": 300,
+        "buckets": [
+          {
+            "start": "2026-12-31T23:55:00Z",
+            "stations": [
+              {
+                "key": "Acurite-5n1:1234:A",
+                "n": 7,
+                "meta": {
+                  "alt_m": 31.0,
+                  "wind_height_m": 4.5
+                },
+                "f": {
+                  "temp_c": {
+                    "avg": 18.2,
+                    "min": 17.9,
+                    "max": 18.6
+                  },
+                  "humidity_pct": {
+                    "avg": 64
+                  },
+                  "pressure_station_hpa": {
+                    "avg": 1008.3
+                  },
+                  "wind_speed_ms": {
+                    "avg": 2.1
+                  },
+                  "wind_gust_ms": {
+                    "max": 4.8
+                  },
+                  "wind_dir_deg": {
+                    "vec": 212
+                  },
+                  "rain_mm": {
+                    "sum": 0.0
+                  },
+                  "battery_ok": {
+                    "last": 1
+                  }
+                },
+                "sig": {
+                  "rssi_db": -61.2,
+                  "snr_db": 19.4
+                },
+                "raw": {}
+              }
+            ]
+          }
+        ]
+      },
+      "config": {
+        "id": "CW1234",
+        "lat": 39.1234,
+        "lon": -94.5678
+      },
+      "rain": {
+        "last_1h_mm": 0.0,
+        "last_24h_mm": 2.54,
+        "since_midnight_mm": 1.016
+      },
+      "expected_packet": "CW1234>APRS,TCPIP*:@010000z3907.40N/09434.07W_212/005g012t065r000p010P004h64b10120eWxPG"
+    }
+  ],
+  "errors": [
+    {
+      "name": "station has no samples",
+      "obs_n": 0,
+      "expected_error": "no_data"
+    },
+    {
+      "name": "position opt-in is off",
+      "position_opt_in": false,
+      "expected_error": "no_position"
+    },
+    {
+      "name": "invalid CWOP id",
+      "id": "CW12",
+      "expected_error": "bad_id"
+    }
+  ]
+}
