@@ -44,6 +44,7 @@ func (a *App) setupUplink() {
 		Config: a.deps.Config, Store: a.store, Platform: a.deps.Platform, Collector: a.pipeline,
 		SDRs: a.sdrList, FlushRollups: a.writer.Flush,
 		Now: a.now, Logger: a.log, DryRun: a.deps.UplinkDryRun,
+		UpdateState: a.updateState, UpdateCheck: a.updateCheckCmd,
 	}
 	if !a.deps.UplinkDryRun {
 		path := a.credentialPath(cfg)

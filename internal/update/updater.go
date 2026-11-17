@@ -690,3 +690,16 @@ func (u *Updater) fetchVerified(ctx context.Context, channel string) (*Manifest,
 	u.set(func(s *State) { s.LastCheck = u.o.Now().UTC() })
 	return m, dec, nil
 }
+
+// Enabled reports whether this build can self-update. A development build
+// (version "dev") cannot.
+func (u *Updater) Enabled() bool { return u.installed != 0 }
+
+// Busy reports whether a check or install is running.
+func (u *Updater) Busy() bool {
+	if u.opMu.TryLock() {
+		u.opMu.Unlock()
+		return false
+	}
+	return true
+}

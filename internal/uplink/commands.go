@@ -112,7 +112,12 @@ func (u *Uplink) dispatch(ctx context.Context, cmd *contract.Command) (map[strin
 		return u.cmdResync(ctx, cmd.Body)
 	case contract.CmdDiag:
 		return u.cmdDiag(ctx, cmd.Body)
-	case contract.CmdBundle, contract.CmdUpdateCheck:
+	case contract.CmdUpdateCheck:
+		if u.opts.UpdateCheck == nil {
+			return nil, errors.New(errNotImplemented)
+		}
+		return u.opts.UpdateCheck(ctx)
+	case contract.CmdBundle:
 		return nil, errors.New(errNotImplemented)
 	case contract.CmdCapture:
 		return nil, errors.New(errCaptureV2)

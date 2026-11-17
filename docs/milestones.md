@@ -265,30 +265,30 @@ networking and update pages in the UI.
 
 Acceptance tests:
 
-- [ ] A manifest signed by the release key under a valid root delegation is
+- [x] A manifest signed by the release key under a valid root delegation is
       accepted; a manifest with a past expiry, a lower version than the
       installed one (without a rollback authorization), or a signature from an
       unknown key is rejected, and each rejection is a distinct `update`
       state or event.
-- [ ] The device pins two root public keys; rotating to a release key
+- [x] The device pins two root public keys; rotating to a release key
       delegated by the backup root works without any other change on the
       device.
-- [ ] A download interrupted at 50% resumes with a ranged request from the
+- [x] A download interrupted at 50% resumes with a ranged request from the
       byte it stopped at; a chunk whose hash does not match is re-fetched and
       the download succeeds; after the configured number of failures the
       state becomes `deferred`, not `failed`.
-- [ ] When `tel.net.link` is `lte`, an OS image update is deferred and an app
+- [x] When `tel.net.link` is `lte`, an OS image update is deferred and an app
       update proceeds.
 - [ ] (Hardware, Pi 4) A staged update whose post-boot health check fails
       (MQTT connect blocked in the test) rolls back automatically, the
       `update` topic shows `rolled_back`, and a `rollback` event is published.
-- [ ] A network change applied through the UI without the browser confirming
+- [x] A network change applied through the UI without the browser confirming
       within 90 s is reverted (fake NetworkManager and fake clock in unit
       tests; confirmed once on hardware by changing the Pi's static IP from
       a browser and not confirming).
 - [ ] (Hardware) With no known network reachable, the Pi brings up the setup
       hotspot and the setup page is reachable on it.
-- [ ] An update outside the configured update window is not started; one
+- [x] An update outside the configured update window is not started; one
       inside the window is.
 
 ## M7: Modem, GPS, RTC and BMP280

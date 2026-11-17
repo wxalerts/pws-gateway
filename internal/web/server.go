@@ -55,6 +55,12 @@ type Options struct {
 	Boot BootChange
 	// Relay reports the device-owned relays. nil means none.
 	Relay RelaySource
+	// Network drives the network page with commit-confirm. nil means the
+	// page reports it is unavailable.
+	Network NetworkSource
+	// Updates drives the signed self-update. nil means the update routes
+	// answer not implemented and /api/update reports the idle placeholder.
+	Updates UpdateSource
 	// Dist is the UI bundle rooted at index.html. nil serves the placeholder.
 	Dist   fs.FS
 	Logger *slog.Logger
@@ -157,8 +163,14 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/claim/cancel", s.authed(s.handleClaimCancel))
 	m.HandleFunc("POST /api/claim/unlink", s.authed(s.handleClaimUnlink))
 	m.HandleFunc("GET /api/update", s.authed(s.handleUpdate))
-	m.HandleFunc("POST /api/update/check", s.authed(s.handleNotImplemented))
-	m.HandleFunc("POST /api/update/apply", s.authed(s.handleNotImplemented))
+	m.HandleFunc("POST /api/update/check", s.authed(s.handleUpdateCheck))
+	m.HandleFunc("POST /api/update/apply", s.authed(s.handleUpdateApply))
+	m.HandleFunc("GET /api/network", s.authed(s.handleNetwork))
+	m.HandleFunc("POST /api/network/apply", s.authed(s.handleNetworkApply))
+	m.HandleFunc("POST /api/network/confirm", s.authed(s.handleNetworkConfirm))
+	m.HandleFunc("POST /api/network/revert", s.authed(s.handleNetworkRevert))
+	m.HandleFunc("DELETE /api/network/connections/{name}", s.authed(s.handleNetworkDelete))
+	m.HandleFunc("GET /api/network/wifi", s.authed(s.handleNetworkWifi))
 	m.HandleFunc("GET /api/logs", s.authed(s.handleLogs))
 	m.HandleFunc("GET /api/readings", s.authed(s.handleReadings))
 	m.HandleFunc("GET /api/version", s.authed(s.handleVersion))

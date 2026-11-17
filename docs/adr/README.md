@@ -13,6 +13,7 @@ pointing at a superseding record.
 | [0005](0005-json-mqtt-contract-versioned-with-v.md) | JSON MQTT contract versioned with `v`, additive changes free | Accepted 2026-11-16 |
 | [0006](0006-signed-commands-no-shell.md) | All server-to-device commands Ed25519 signed, no shell | Accepted 2026-11-16 |
 | [0007](0007-split-build-and-sign-ci.md) | Split build and sign CI with Infisical OIDC and offline root key | Accepted 2026-11-16 |
+| [0008](0008-ab-slots-with-the-firmware-tryboot-flag.md) | A/B slots with the firmware tryboot flag | Accepted 2026-11-17 |
 
 To add one: copy the shape of an existing file, take the next number, open a
 pull request. `AGENTS.md` says new decisions go here.

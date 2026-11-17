@@ -46,11 +46,15 @@ const (
 	envListen           = "PWSGW_LISTEN"
 	envHTTPRedirect     = "PWSGW_HTTP_REDIRECT"
 	envLogLevel         = "PWSGW_LOG_LEVEL"
+	envUpdateURL        = "PWSGW_UPDATE_URL"
+	envAutoboot         = "PWSGW_AUTOBOOT_FILE"
+	defaultAutoboot     = "/boot/autoboot/autoboot.txt"
 	passwordPromptLimit = 4096
 )
 
 func main() {
 	args := os.Args[1:]
+	handOverToAppSlot(args)
 	cmd := "run"
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		cmd, args = args[0], args[1:]
@@ -94,6 +98,7 @@ type runFlags struct {
 	dataDir, listen, redirect, logLevel string
 	rtl433Bin, replay                   string
 	replaySpeed                         float64
+	manifestBase, autobootFile          string
 	uplinkDryRun                        bool
 }
 
@@ -107,6 +112,8 @@ func parseFlags(name string, args []string) (runFlags, error) {
 	fs.StringVar(&f.rtl433Bin, "rtl433-bin", "rtl_433", "rtl_433 executable, resolved from PATH when not a path")
 	fs.StringVar(&f.replay, "replay", "", "development: replay this rtl_433 JSONL file instead of starting rtl_433")
 	fs.Float64Var(&f.replaySpeed, "replay-speed", 10, "replay speed multiplier, 0 for as fast as possible")
+	fs.StringVar(&f.manifestBase, "update-url", os.Getenv(envUpdateURL), "update manifest service base URL ("+envUpdateURL+"), default the WxAlerts service")
+	fs.StringVar(&f.autobootFile, "autoboot-file", envOr(envAutoboot, defaultAutoboot), "autoboot.txt of the A/B image ("+envAutoboot+"), OS image updates are off when it does not exist")
 	fs.BoolVar(&f.uplinkDryRun, "uplink-dry-run", false, "bench: build and enqueue uplink messages, log their sizes, never connect to the broker")
 	if err := fs.Parse(args); err != nil {
 		return f, err
@@ -211,6 +218,7 @@ func runCmd(args []string) error {
 
 	rt, err := app.New(app.Deps{
 		DataDir: f.dataDir, Config: cfgStore, Platform: plat, Logger: logger,
+		M6:        m6Deps(f, stop, logger),
 		Rtl433Bin: f.rtl433Bin, ReplayFile: f.replay, ReplaySpeed: f.replaySpeed, ReplayRewriteTime: true, UplinkDryRun: f.uplinkDryRun,
 	})
 	if err != nil {
@@ -224,7 +232,8 @@ func runCmd(args []string) error {
 	srv, err := web.New(web.Options{
 		Platform: plat, Config: cfgStore, Auth: authStore, Sessions: sessions,
 		Auditor: auth.Auditor{Logger: logger}, Logs: ring, Dist: dist,
-		Stations: rt.Stations(), Readings: rt.Readings(), Status: rt.Status(), Claim: rt.Claim(), Relay: rt.Relay(), Boot: rt.Boot(), Logger: logger,
+		Stations: rt.Stations(), Readings: rt.Readings(), Status: rt.Status(), Claim: rt.Claim(), Relay: rt.Relay(), Boot: rt.Boot(),
+		Network: rt.Network(), Updates: rt.Updates(), Logger: logger,
 		Version: version.Version, Commit: version.Commit, BuildDate: version.BuildDate,
 	})
 	if err != nil {

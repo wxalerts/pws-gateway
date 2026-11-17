@@ -54,6 +54,13 @@ See ADR 0007.
 - Check whether Infisical KMS can sign without exposing the key to the runner.
 - Command signing uses a separate Ed25519 key (see the MQTT contract).
 
+## A/B decision (Nov 17)
+
+Resolved by [ADR 0008](../adr/0008-ab-slots-with-the-firmware-tryboot-flag.md):
+the firmware `tryboot` flag on every Pi model, one layout for all boards. The
+Pi 3B+ rollback run is still owed on real hardware. Implementation notes:
+[Update manifest, slots and state machine](update-manifest-and-slots.md).
+
 ## Before image work
 
 - Resolve A/B boot and rollback on a real Pi 3B+. This sets the partition
