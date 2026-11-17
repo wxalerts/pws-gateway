@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"reflect"
 
 	"github.com/godbus/dbus/v5"
 
@@ -349,7 +350,29 @@ func toSettings(c platform.Connection, existing settings) (settings, error) {
 			w["security"] = variant("802-11-wireless-security")
 		}
 	}
+	dropEmpty(out)
 	return out, nil
+}
+
+// dropEmpty removes keys whose value is an empty array or dictionary.
+// NetworkManager treats an absent key as empty, and echoing the empty arrays
+// it returned from GetSettings back in an Update made the bus daemon drop our
+// connection intermittently on a Pi 4 (the message is malformed depending on
+// the order the keys are written, an empty array of 8 byte aligned elements
+// being the usual culprit in D-Bus encoders). Sending less is safe and sends
+// no empty arrays.
+func dropEmpty(s settings) {
+	for name, kv := range s {
+		for k, v := range kv {
+			rv := reflect.ValueOf(v.Value())
+			if (rv.Kind() == reflect.Slice || rv.Kind() == reflect.Map) && rv.Len() == 0 {
+				delete(kv, k)
+			}
+		}
+		if len(kv) == 0 {
+			delete(s, name)
+		}
+	}
 }
 
 func section(s settings, name string) map[string]dbus.Variant {

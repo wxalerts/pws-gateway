@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"strings"
 	"sync"
 
 	"github.com/godbus/dbus/v5"
@@ -62,6 +65,17 @@ func (s *systemBus) connect() (*dbus.Conn, error) {
 }
 
 func (s *systemBus) call(ctx context.Context, dest string, path dbus.ObjectPath, method string, args ...any) ([]any, error) {
+	body, err := s.callOnce(ctx, dest, path, method, args...)
+	if err != nil && isConnLost(err) && ctx.Err() == nil {
+		// The bus dropped our connection (seen on a Pi after minutes idle).
+		// Every call the manager makes is safe to repeat, so reconnect once.
+		s.drop()
+		return s.callOnce(ctx, dest, path, method, args...)
+	}
+	return body, err
+}
+
+func (s *systemBus) callOnce(ctx context.Context, dest string, path dbus.ObjectPath, method string, args ...any) ([]any, error) {
 	c, err := s.connect()
 	if err != nil {
 		return nil, err
@@ -71,6 +85,21 @@ func (s *systemBus) call(ctx context.Context, dest string, path dbus.ObjectPath,
 		return nil, call.Err
 	}
 	return call.Body, nil
+}
+
+// drop forgets a dead connection so the next call dials again.
+func (s *systemBus) drop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.conn != nil {
+		_ = s.conn.Close()
+		s.conn = nil
+	}
+}
+
+func isConnLost(err error) bool {
+	return errors.Is(err, io.EOF) || errors.Is(err, dbus.ErrClosed) || errors.Is(err, net.ErrClosed) ||
+		strings.Contains(err.Error(), "EOF") || strings.Contains(err.Error(), "use of closed")
 }
 
 func (s *systemBus) prop(ctx context.Context, dest string, path dbus.ObjectPath, iface, name string) (any, error) {

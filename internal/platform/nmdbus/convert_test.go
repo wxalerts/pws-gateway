@@ -256,3 +256,29 @@ func TestHotspotSettings(t *testing.T) {
 		}
 	}
 }
+
+func TestToSettingsSendsNoEmptyArrays(t *testing.T) {
+	existing := settings{
+		"802-3-ethernet": {"s390-options": variant(map[string]string{}), "auto-negotiate": variant(false)},
+		"ipv4":           {"route-data": variant([]map[string]dbus.Variant{}), "method": variant("auto")},
+		"proxy":          {},
+		"connection":     {"type": variant("802-3-ethernet"), "permissions": variant([]string{})},
+	}
+	out, err := toSettings(platform.Connection{Name: "wired", Type: platform.ConnEthernet, IPv4: platform.IPv4Settings{Method: platform.IPv4Auto}}, existing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for sec, kv := range out {
+		if len(kv) == 0 {
+			t.Errorf("empty section %s sent", sec)
+		}
+		for k, v := range kv {
+			if rv := reflect.ValueOf(v.Value()); (rv.Kind() == reflect.Slice || rv.Kind() == reflect.Map) && rv.Len() == 0 {
+				t.Errorf("%s.%s is an empty array", sec, k)
+			}
+		}
+	}
+	if _, ok := out["802-3-ethernet"]["auto-negotiate"]; !ok {
+		t.Error("a non-empty unknown key must survive")
+	}
+}
