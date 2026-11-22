@@ -281,12 +281,16 @@ func TestOutageThenReplay(t *testing.T) {
 }
 
 // TestBacklogReplayLimits: a backlog goes out at most 20 buckets per message
-// and at most one message per second.
+// and at most one message per ReplayInterval (15 s by default, the server limit
+// of 4 messages a minute; the test shortens it).
 func TestBacklogReplayLimits(t *testing.T) {
 	b := newBroker(t)
 	r := newRig(t, time.Date(2026, 11, 16, 14, 1, 0, 0, time.UTC))
 	r.writeBuckets(time.Date(2026, 11, 16, 10, 0, 0, 0, time.UTC), 45)
-	u := r.connected(b, func(o *Options) { o.ReplayInterval = 0 }) // 0 selects the 1 s default
+	if ReplayInterval != 15*time.Second {
+		t.Fatalf("default ReplayInterval = %v, want 15s (4 messages a minute)", ReplayInterval)
+	}
+	u := r.connected(b, func(o *Options) { o.ReplayInterval = 300 * time.Millisecond })
 
 	n, err := u.obsCycle(context.Background())
 	if err != nil || n != 3 {
@@ -302,8 +306,8 @@ func TestBacklogReplayLimits(t *testing.T) {
 			t.Fatalf("message %d has seq %d", i, o.Seq)
 		}
 		if i > 0 {
-			if gap := m.At.Sub(msgs[i-1].At); gap < 900*time.Millisecond {
-				t.Fatalf("messages %d and %d arrived %v apart, want at least 1 s", i-1, i, gap)
+			if gap := m.At.Sub(msgs[i-1].At); gap < 250*time.Millisecond {
+				t.Fatalf("messages %d and %d arrived %v apart, want at least the replay interval", i-1, i, gap)
 			}
 		}
 	}

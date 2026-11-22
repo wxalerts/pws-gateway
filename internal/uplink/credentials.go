@@ -17,6 +17,11 @@ import (
 type Credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// UserID is the owner's numeric account id from the claim response. When
+	// present the uplink uses the V2 topics V2/{user_id}/PWS/{device_id}/...;
+	// a credential file without it (claimed before contract v2) keeps the v1
+	// topics.
+	UserID int64 `json:"user_id,omitempty"`
 	// ClientCertFile and ClientKeyFile are optional PEM paths for mutual TLS.
 	// Both or neither.
 	ClientCertFile string `json:"client_cert_file,omitempty"`
@@ -55,6 +60,9 @@ func LoadCredentials(path string) (Credentials, error) {
 	}
 	if c.Username == "" || c.Password == "" {
 		return Credentials{}, fmt.Errorf("%w: username and password are required", ErrCredentials)
+	}
+	if c.UserID < 0 {
+		return Credentials{}, fmt.Errorf("%w: user_id must be a positive account id", ErrCredentials)
 	}
 	if (c.ClientCertFile == "") != (c.ClientKeyFile == "") {
 		return Credentials{}, fmt.Errorf("%w: client_cert_file and client_key_file must be set together", ErrCredentials)

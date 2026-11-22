@@ -108,12 +108,14 @@ func newBroker(t *testing.T) *testBroker {
 		t.Fatal(err)
 	}
 	b := &testBroker{srv: srv, addr: addr}
-	if err := srv.Subscribe("pws/#", 1, func(_ *mqtt.Client, _ packets.Subscription, pk packets.Packet) {
-		b.mu.Lock()
-		b.got = append(b.got, received{Topic: pk.TopicName, Payload: append([]byte(nil), pk.Payload...), Retain: pk.FixedHeader.Retain, At: time.Now()})
-		b.mu.Unlock()
-	}); err != nil {
-		t.Fatal(err)
+	for i, filter := range []string{"pws/#", "V2/#"} {
+		if err := srv.Subscribe(filter, i+1, func(_ *mqtt.Client, _ packets.Subscription, pk packets.Packet) {
+			b.mu.Lock()
+			b.got = append(b.got, received{Topic: pk.TopicName, Payload: append([]byte(nil), pk.Payload...), Retain: pk.FixedHeader.Retain, At: time.Now()})
+			b.mu.Unlock()
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	go func() { _ = srv.Serve() }()
 	t.Cleanup(func() { _ = srv.Close() })

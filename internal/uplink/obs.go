@@ -266,6 +266,65 @@ func allFinite(vs ...float64) bool {
 	return true
 }
 
+// obsBatch is the list of things one obs message carries: v1 per station
+// buckets or v2 combined records. It lets the packing and the 64 KB split be
+// written once.
+type obsBatch interface {
+	size() int
+	// start is the start of the i-th item.
+	start(i int) time.Time
+	// encode serializes the first n items as message seq.
+	encode(u *Uplink, seq uint64, n int, now time.Time) ([]byte, error)
+	// stripRaw drops the raw passthrough of the first item and reports
+	// whether there was any.
+	stripRaw() bool
+	// rest drops the first n items.
+	rest(n int) obsBatch
+}
+
+type bucketBatch []contract.Bucket
+
+func (b bucketBatch) size() int             { return len(b) }
+func (b bucketBatch) start(i int) time.Time { return b[i].Start }
+func (b bucketBatch) rest(n int) obsBatch   { return b[n:] }
+func (b bucketBatch) stripRaw() bool        { return stripRaw(&b[0]) }
+func (b bucketBatch) encode(u *Uplink, seq uint64, n int, now time.Time) ([]byte, error) {
+	return contract.Marshal(&contract.Obs{
+		V: contract.Version, DeviceID: u.opts.DeviceID, Seq: seq,
+		Sent: now.UTC().Truncate(time.Second), IntervalS: int(BucketWidth / time.Second),
+		Buckets: b[:n],
+	})
+}
+
+type recordBatch []contract.Record
+
+func (b recordBatch) size() int             { return len(b) }
+func (b recordBatch) start(i int) time.Time { return b[i].Start }
+func (b recordBatch) rest(n int) obsBatch   { return b[n:] }
+func (b recordBatch) stripRaw() bool {
+	if b[0].Raw == nil {
+		return false
+	}
+	b[0].Raw = nil
+	return true
+}
+func (b recordBatch) encode(u *Uplink, seq uint64, n int, now time.Time) ([]byte, error) {
+	return contract.Marshal(&contract.Obs2{
+		V: contract.VersionV2, DeviceID: u.opts.DeviceID, Seq: seq,
+		Sent: now.UTC().Truncate(time.Second), IntervalS: int(BucketWidth / time.Second),
+		Buckets: b[:n],
+	})
+}
+
+// batchFor picks the obs shape for this device: the combined v2 record when it
+// holds a user id, else the v1 stations array. normal is false for a resync.
+func (u *Uplink) batchFor(ctx context.Context, cfg config.Config, buckets []contract.Bucket, now time.Time, normal bool) obsBatch {
+	if !u.scope().V2() {
+		return bucketBatch(buckets)
+	}
+	return recordBatch(combineBuckets(cfg, buckets, now, normal, u.timeSynced(ctx)))
+}
+
 // emitObs packs buckets into messages and enqueues them, outbox first: the
 // serialized message is stored before the cursor moves and before anything is
 // published, so a crash loses nothing. With advance the cursor moves past each
@@ -276,19 +335,21 @@ func allFinite(vs ...float64) bool {
 // 64 KB is split at bucket boundaries; a single oversized bucket loses its raw
 // passthrough before giving up.
 func (u *Uplink) emitObs(ctx context.Context, st state, buckets []contract.Bucket, now time.Time, advance bool) (int, error) {
+	cfg := u.opts.Config.Get()
+	batch := u.batchFor(ctx, cfg, buckets, now, advance)
 	per := NormalBuckets
-	if len(buckets) > NormalBuckets {
+	if batch.size() > NormalBuckets {
 		per = MaxReplayBuckets
 	}
 	msgs := 0
-	for len(buckets) > 0 {
-		n := min(per, len(buckets))
+	for batch.size() > 0 {
+		n := min(per, batch.size())
 		st.Seq++
-		data, used, err := u.encodeFit(st.Seq, buckets, n, now)
+		data, used, err := u.encodeFit(st.Seq, batch, n, now)
 		if err != nil {
 			return msgs, err
 		}
-		topic := contract.Topic(u.opts.DeviceID, contract.KindObs)
+		topic := u.scope().Topic(contract.KindObs)
 		if err := u.enqueue(ctx, topic, data); err != nil {
 			return msgs, err
 		}
@@ -297,7 +358,7 @@ func (u *Uplink) emitObs(ctx context.Context, st state, buckets []contract.Bucke
 				return msgs, err
 			}
 		}
-		last := buckets[used-1].Start.Add(BucketWidth)
+		last := batch.start(used - 1).Add(BucketWidth)
 		if advance && last.After(st.BuiltThrough) {
 			st.BuiltThrough = last
 		}
@@ -306,7 +367,7 @@ func (u *Uplink) emitObs(ctx context.Context, st state, buckets []contract.Bucke
 		}
 		u.wake()
 		msgs++
-		buckets = buckets[used:]
+		batch = batch.rest(used)
 	}
 	return msgs, nil
 }
@@ -314,16 +375,11 @@ func (u *Uplink) emitObs(ctx context.Context, st state, buckets []contract.Bucke
 // errBucketTooLarge reports a single bucket that cannot fit in a message.
 var errBucketTooLarge = errors.New("uplink: one bucket exceeds the 64 KB message limit")
 
-// encodeFit serializes the first n buckets, shrinking n until the message is
-// within the limit, and returns the payload and how many buckets it holds.
-func (u *Uplink) encodeFit(seq uint64, buckets []contract.Bucket, n int, now time.Time) ([]byte, int, error) {
+// encodeFit serializes the first n items, shrinking n until the message is
+// within the limit, and returns the payload and how many items it holds.
+func (u *Uplink) encodeFit(seq uint64, batch obsBatch, n int, now time.Time) ([]byte, int, error) {
 	for {
-		msg := contract.Obs{
-			V: contract.Version, DeviceID: u.opts.DeviceID, Seq: seq,
-			Sent: now.UTC().Truncate(time.Second), IntervalS: int(BucketWidth / time.Second),
-			Buckets: buckets[:n],
-		}
-		data, err := contract.Marshal(&msg)
+		data, err := batch.encode(u, seq, n, now)
 		switch {
 		case err == nil:
 			return data, n, nil
@@ -331,8 +387,8 @@ func (u *Uplink) encodeFit(seq uint64, buckets []contract.Bucket, n int, now tim
 			return nil, 0, err
 		case n > 1:
 			n = (n + 1) / 2
-		case stripRaw(&buckets[0]):
-			u.log.Warn("bucket too large, dropped raw passthrough", "start", buckets[0].Start)
+		case batch.stripRaw():
+			u.log.Warn("bucket too large, dropped raw passthrough", "start", batch.start(0))
 		default:
 			return nil, 0, errBucketTooLarge
 		}

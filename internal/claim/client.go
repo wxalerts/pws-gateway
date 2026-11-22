@@ -76,7 +76,10 @@ type mqttReply struct {
 // pollReply is the union of the poll bodies: the 200 credentials, or the 400
 // error with an optional new interval.
 type pollReply struct {
-	DeviceID          string    `json:"device_id"`
+	DeviceID string `json:"device_id"`
+	// UserID is the owner's numeric account id. A server that predates
+	// contract v2 does not send it; 0 then keeps the device on the v1 topics.
+	UserID            int64     `json:"user_id"`
 	MQTT              mqttReply `json:"mqtt"`
 	CredentialVersion int       `json:"credential_version"`
 	Error             string    `json:"error"`

@@ -35,8 +35,11 @@ const (
 	NormalBuckets = 3
 	// MaxReplayBuckets is the most buckets in one message on a backlog.
 	MaxReplayBuckets = 20
-	// ReplayInterval is the minimum gap between outbox publishes.
-	ReplayInterval = time.Second
+	// ReplayInterval is the minimum gap between outbox publishes: one message
+	// every 15 seconds, which is the server limit of 4 messages a minute per
+	// device. A replay therefore paces itself to the limit instead of relying
+	// on the server to exempt bursts (docs/contract/mqtt-v2.md, rate limit).
+	ReplayInterval = 15 * time.Second
 	// TimeUnsyncedAfter is how long the clock may stay unsynced after start
 	// before a time_unsynced event is published.
 	TimeUnsyncedAfter = 10 * time.Minute
@@ -68,6 +71,10 @@ type Collector interface {
 // Options configures an Uplink. Zero values take the defaults noted.
 type Options struct {
 	DeviceID string
+	// UserID is the owner's numeric account id from the claim response. When
+	// it is set the uplink uses the V2 topic tree and the V2 obs record; when
+	// it is 0 (an older claim) it keeps the v1 topics and the v1 obs shape.
+	UserID int64
 	// BrokerURL is mqtts://host:port (or mqtt:// for tests). Not needed in
 	// DryRun.
 	BrokerURL   string
@@ -240,7 +247,7 @@ func (u *Uplink) PublishUpdate(ctx context.Context) {
 	}
 	pctx, cancel := context.WithTimeout(ctx, publishTimeout)
 	defer cancel()
-	if err := u.publishVia(pctx, cm, contract.Topic(u.opts.DeviceID, contract.KindUpdate), data, true); err != nil {
+	if err := u.publishVia(pctx, cm, u.scope().Topic(contract.KindUpdate), data, true); err != nil {
 		u.log.Warn("publish update failed", "err", err)
 	}
 }
@@ -310,7 +317,7 @@ func (u *Uplink) connect(ctx context.Context) error {
 		ReconnectBackoff:              func(attempt int) time.Duration { return Backoff(attempt, u.opts.Rand) },
 		ConnectTimeout:                15 * time.Second,
 		WillMessage: &paho.WillMessage{
-			Topic: contract.Topic(u.opts.DeviceID, contract.KindStatus), Payload: offline, QoS: 1, Retain: true,
+			Topic: u.scope().Topic(contract.KindStatus), Payload: offline, QoS: 1, Retain: true,
 		},
 		OnConnectionUp: u.onConnectionUp,
 		OnConnectionDown: func() bool {
@@ -352,7 +359,7 @@ func (u *Uplink) onConnectionUp(cm *autopaho.ConnectionManager, _ *paho.Connack)
 		defer cancel()
 		online, err := contract.Marshal(statusPtr(contract.StatusOnline))
 		if err == nil {
-			err = u.publishVia(ctx, cm, contract.Topic(u.opts.DeviceID, contract.KindStatus), online, true)
+			err = u.publishVia(ctx, cm, u.scope().Topic(contract.KindStatus), online, true)
 		}
 		if err != nil {
 			u.log.Warn("publish online status failed", "err", err)
@@ -361,11 +368,11 @@ func (u *Uplink) onConnectionUp(cm *autopaho.ConnectionManager, _ *paho.Connack)
 		upd := u.UpdateMessage()
 		if data, merr := contract.Marshal(&upd); merr != nil {
 			u.log.Error("build update message", "err", merr)
-		} else if perr := u.publishVia(ctx, cm, contract.Topic(u.opts.DeviceID, contract.KindUpdate), data, true); perr != nil {
+		} else if perr := u.publishVia(ctx, cm, u.scope().Topic(contract.KindUpdate), data, true); perr != nil {
 			u.log.Warn("publish update failed", "err", perr)
 		}
 		_, err = cm.Subscribe(ctx, &paho.Subscribe{Subscriptions: []paho.SubscribeOptions{
-			{Topic: contract.CommandFilter(u.opts.DeviceID), QoS: 1},
+			{Topic: u.scope().CommandFilter(), QoS: 1},
 		}})
 		if err != nil {
 			u.log.Warn("subscribe to commands failed", "err", err)
@@ -410,7 +417,7 @@ func (u *Uplink) shutdown() {
 	defer cancel()
 	if u.connected.Load() {
 		if off, err := contract.Marshal(statusPtr(contract.StatusOffline)); err == nil {
-			if err := u.publishVia(ctx, cm, contract.Topic(u.opts.DeviceID, contract.KindStatus), off, true); err != nil {
+			if err := u.publishVia(ctx, cm, u.scope().Topic(contract.KindStatus), off, true); err != nil {
 				u.log.Debug("publish offline status failed", "err", err)
 			}
 		}
@@ -492,7 +499,7 @@ func (u *Uplink) Emit(ctx context.Context, typ string, detail map[string]any) {
 		raw = b
 	}
 	ev := &contract.Event{V: contract.Version, DeviceID: u.opts.DeviceID, TS: u.now().UTC().Truncate(time.Second), Type: typ, Detail: raw}
-	if err := u.publishMessage(ctx, contract.Topic(u.opts.DeviceID, contract.KindEvent), ev); err != nil {
+	if err := u.publishMessage(ctx, u.scope().Topic(contract.KindEvent), ev); err != nil {
 		u.log.Error("queue event failed", "type", typ, "err", err)
 	}
 }
@@ -560,4 +567,9 @@ func (u *Uplink) prune(ctx context.Context) {
 			"dropped": dropped, "dropped_obs": res.DroppedObs,
 		})
 	}
+}
+
+// scope is the topic tree of this device: V2 when it holds a user id.
+func (u *Uplink) scope() contract.Scope {
+	return contract.Scope{DeviceID: u.opts.DeviceID, UserID: u.opts.UserID}
 }

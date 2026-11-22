@@ -65,7 +65,7 @@ func (u *Uplink) commandWorker(ctx context.Context) {
 // Anything that fails a check is logged at warn and ignored without an ack.
 func (u *Uplink) handleCommand(ctx context.Context, topic string, payload []byte) {
 	pt, err := contract.ParseTopic(topic)
-	if err != nil || pt.Kind != contract.KindCmd || pt.DeviceID != u.opts.DeviceID {
+	if err != nil || pt.Kind != contract.KindCmd || pt.DeviceID != u.opts.DeviceID || pt.UserID != u.opts.UserID {
 		u.log.Warn("ignored message on unexpected topic", "topic", topic)
 		return
 	}
@@ -146,7 +146,7 @@ func (u *Uplink) ack(ctx context.Context, cmd *contract.Command, result map[stri
 			a.Result = b
 		}
 	}
-	if err := u.publishMessage(ctx, contract.AckTopic(u.opts.DeviceID, cmd.ID), a); err != nil {
+	if err := u.publishMessage(ctx, u.scope().AckTopic(cmd.ID), a); err != nil {
 		u.log.Error("queue ack failed", "id", cmd.ID, "err", err)
 	}
 }

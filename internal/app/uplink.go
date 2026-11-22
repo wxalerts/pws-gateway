@@ -62,6 +62,7 @@ func (a *App) setupUplink() {
 			return
 		}
 		opts.Credentials = cred
+		opts.UserID = cred.UserID
 		if ca := filepath.Join(a.deps.DataDir, caFileName); fileExists(ca) {
 			opts.CAFile = ca
 		}
