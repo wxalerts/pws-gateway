@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+
+	"github.com/wxalerts/pws-gateway/internal/atomicfile"
 )
 
 // Credentials is the content of the credential file named by
@@ -68,6 +70,17 @@ func LoadCredentials(path string) (Credentials, error) {
 		return Credentials{}, fmt.Errorf("%w: client_cert_file and client_key_file must be set together", ErrCredentials)
 	}
 	return c, nil
+}
+
+// SaveCredentials writes the credential file atomically with mode 0600. The
+// whole struct is written, so the client certificate paths survive a user id
+// refresh.
+func SaveCredentials(path string, c Credentials) error {
+	raw, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	return atomicfile.WriteFile(path, append(raw, '\n'), 0o600)
 }
 
 // TLSConfig builds the broker TLS configuration: the system roots plus the

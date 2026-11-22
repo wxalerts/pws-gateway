@@ -3,8 +3,12 @@ package uplink
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
+
+	mqtt "github.com/mochi-mqtt/server/v2"
+	"github.com/mochi-mqtt/server/v2/packets"
 
 	"github.com/wxalerts/pws-gateway/internal/config"
 	"github.com/wxalerts/pws-gateway/internal/contract"
@@ -139,3 +143,82 @@ func TestV1UplinkUnchangedWithoutUserID(t *testing.T) {
 }
 
 var _ = model.FieldTempC
+
+// denyHook refuses topics under a prefix, as a broker whose V2 rules are not in
+// place yet would: writes only, or subscriptions as well.
+type denyHook struct {
+	mqtt.HookBase
+	prefix    string
+	subscribe bool
+}
+
+func (h *denyHook) ID() string { return "deny-v2" }
+func (h *denyHook) Provides(b byte) bool {
+	return b == mqtt.OnACLCheck || b == mqtt.OnConnectAuthenticate
+}
+func (h *denyHook) OnConnectAuthenticate(*mqtt.Client, packets.Packet) bool { return true }
+func (h *denyHook) OnACLCheck(_ *mqtt.Client, topic string, write bool) bool {
+	if !strings.HasPrefix(topic, h.prefix) {
+		return true
+	}
+	return !write && !h.subscribe
+}
+
+func newDenyingBroker(t *testing.T, subscribe bool) *testBroker {
+	t.Helper()
+	return newBrokerWith(t, &denyHook{prefix: "V2/", subscribe: subscribe})
+}
+
+// TestFallsBackToV1WhenV2PublishIsRefused: the broker refuses writes on the V2
+// tree. The device switches to the v1 topics, drops what it had queued for V2
+// and rebuilds those buckets in the v1 shape, so nothing is lost.
+func TestFallsBackToV1WhenV2PublishIsRefused(t *testing.T) {
+	b := newDenyingBroker(t, false)
+	r := newRig(t, time.Date(2026, 11, 16, 14, 1, 0, 0, time.UTC))
+	r.writeBuckets(time.Date(2026, 11, 16, 13, 45, 0, 0, time.UTC), 3)
+	u := r.uplink(func(o *Options) { o.BrokerURL = b.url(); o.TLS = nil; o.UserID = 42 })
+	// A V2 observation message is queued before the device ever connects.
+	if n, err := u.obsCycle(context.Background()); err != nil || n != 1 {
+		t.Fatalf("obsCycle = %d, %v", n, err)
+	}
+	r.run(u)
+
+	waitFor(t, 15*time.Second, "fallback", func() bool { return u.v1Fallback.Load() })
+	waitFor(t, 15*time.Second, "reconnected", func() bool { return u.connected.Load() })
+	if _, err := u.obsCycle(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, 15*time.Second, "v1 obs", func() bool { return b.count(obsTopic()) >= 1 })
+	if got := b.count(v2ObsTopic()); got != 0 {
+		t.Fatalf("%d messages reached the refused V2 tree", got)
+	}
+	o := decodeObs(t, b.messages(obsTopic())[0].Payload)
+	if o.V != 0 || len(o.Buckets) != 3 {
+		t.Fatalf("the dropped V2 buckets must be rebuilt as v1: v=%d buckets=%d", o.V, len(o.Buckets))
+	}
+	if u.scope().V2() {
+		t.Fatal("scope must be v1 after the fallback")
+	}
+	// A restart soon after starts on v1 without trying V2 again.
+	again := r.uplink(func(o *Options) { o.UserID = 42 })
+	if again.scope().V2() {
+		t.Fatal("a recent refusal for the same user id must start on v1")
+	}
+	// A different owner is tried on V2.
+	other := r.uplink(func(o *Options) { o.UserID = 43 })
+	if !other.scope().V2() {
+		t.Fatal("a new user id must try V2")
+	}
+}
+
+// TestFallsBackToV1WhenTheCommandSubscriptionIsRefused covers the broker that
+// refuses the V2 subscription too.
+func TestFallsBackToV1WhenTheCommandSubscriptionIsRefused(t *testing.T) {
+	b := newDenyingBroker(t, true)
+	r := newRig(t, time.Date(2026, 11, 16, 14, 1, 0, 0, time.UTC))
+	u := r.connected(b, func(o *Options) { o.UserID = 42 })
+	waitFor(t, 15*time.Second, "fallback", func() bool { return u.v1Fallback.Load() })
+	waitFor(t, 15*time.Second, "v1 status", func() bool {
+		return b.count(contract.Scope{DeviceID: testDevice}.Topic(contract.KindStatus)) > 0 && u.connected.Load()
+	})
+}

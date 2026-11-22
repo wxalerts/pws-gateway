@@ -5,6 +5,7 @@ import { Alert } from '../components/Alert';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { GroupSources } from '../components/GroupSources';
 import { NumberField, TextField } from '../components/fields';
 import { Table, type Column } from '../components/Table';
 import { formatRelative } from '../lib/format';
@@ -228,6 +229,7 @@ export function StationEditor({ station, onSave, onCancel }: StationEditorProps)
 
 export function StationsPage() {
   const poll = usePoll((s) => api.stations.list({ signal: s }), 10000);
+  const composite = usePoll((s) => api.config.composite({ signal: s }), 30000);
   const [editing, setEditing] = useState<Station | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
@@ -291,6 +293,16 @@ export function StationsPage() {
             station={editing}
             onSave={save}
             onCancel={() => setEditing(null)}
+          />
+        )}
+        {composite.data && (
+          <GroupSources
+            stations={stations}
+            composite={composite.data}
+            onSave={async (next) => {
+              await api.config.putSection('composite', next);
+              await composite.refresh();
+            }}
           />
         )}
         <Card id="stations">

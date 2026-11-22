@@ -40,7 +40,8 @@ Code: `internal/claim/`, `internal/web/handlers_claim.go`,
   the new `interval`), `expired_token` or `access_denied`, or 200 once with
   `{device_id, user_id, mqtt: {url, host, port, transport, path, username, client_id,
   password}, credential_version}`. `user_id` is the owner's numeric account id and selects
-  the V2 topics; a server that does not send it leaves the device on v1. A 409 `already_claimed` from start means
+  the V2 topics; a server that does not send it leaves the device on v1. A gateway that predates `user_id` learns it with `GET /pws/device/identity` (HTTP Basic with its own credential); see
+  `docs/contract/mqtt-v2.md`. A 409 `already_claimed` from start means
   the server still lists this hardware; the owner removes it on the WxAlerts
   site first. The owner approves the code at `https://wxalerts.org/pws/claim`.
 - Hardware id: `hw_id = "hw1_" + hex(SHA-256("wxalerts-pws-hwid-v1" NUL

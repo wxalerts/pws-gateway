@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -143,8 +144,11 @@ type Uplink struct {
 
 	buildMu sync.Mutex // serializes obs building and the uplink_state key
 
-	gateMu         sync.Mutex // guards the time gate fields
-	unsyncedSince  time.Time
+	gateMu        sync.Mutex // guards the time gate fields
+	unsyncedSince time.Time
+	// v1Fallback is set when the broker refused the V2 topics; scope() then
+	// returns the v1 tree until the process restarts (or V1FallbackFor passes).
+	v1Fallback     atomic.Bool
 	unsyncedEvent  bool
 	wasSynced      bool
 	overflowActive bool
@@ -195,7 +199,29 @@ func New(opts Options) (*Uplink, error) {
 		replay:   &kvReplayCache{store: opts.Store, now: opts.Now},
 	}
 	u.unsyncedSince = u.now()
+	u.restoreFallback()
 	return u, nil
+}
+
+// restoreFallback starts on the v1 topics when a recent run was refused on the
+// V2 ones for this same user id. The marker expires after V1FallbackFor so a
+// server that has since been fixed is tried again.
+func (u *Uplink) restoreFallback() {
+	if u.opts.UserID <= 0 || u.opts.Store == nil {
+		return
+	}
+	v, ok, err := u.opts.Store.Get(context.Background(), V1FallbackKey)
+	if err != nil || !ok {
+		return
+	}
+	var uid int64
+	var at string
+	if _, err := fmt.Sscanf(v, "%d %s", &uid, &at); err != nil || uid != u.opts.UserID {
+		return
+	}
+	if t, err := time.Parse(time.RFC3339, at); err == nil && u.now().Sub(t) < V1FallbackFor {
+		u.v1Fallback.Store(true)
+	}
 }
 
 // Status reports the connection state.
@@ -325,7 +351,13 @@ func (u *Uplink) connect(ctx context.Context) error {
 			u.log.Warn("broker connection lost")
 			return true
 		},
-		OnConnectError: func(err error) { u.log.Warn("broker connect failed", "err", err) },
+		OnConnectError: func(err error) {
+			u.log.Warn("broker connect failed", "err", err)
+			var ce *autopaho.ConnackError
+			if errors.As(err, &ce) {
+				u.noteRefusal(u.scope().Topic(contract.KindStatus), &refusedError{what: "connect", code: ce.ReasonCode})
+			}
+		},
 		ClientConfig: paho.ClientConfig{
 			ClientID: u.opts.DeviceID,
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
@@ -371,12 +403,21 @@ func (u *Uplink) onConnectionUp(cm *autopaho.ConnectionManager, _ *paho.Connack)
 		} else if perr := u.publishVia(ctx, cm, u.scope().Topic(contract.KindUpdate), data, true); perr != nil {
 			u.log.Warn("publish update failed", "err", perr)
 		}
-		_, err = cm.Subscribe(ctx, &paho.Subscribe{Subscriptions: []paho.SubscribeOptions{
-			{Topic: u.scope().CommandFilter(), QoS: 1},
+		filter := u.scope().CommandFilter()
+		sub, err := cm.Subscribe(ctx, &paho.Subscribe{Subscriptions: []paho.SubscribeOptions{
+			{Topic: filter, QoS: 1},
 		}})
 		if err != nil {
 			u.log.Warn("subscribe to commands failed", "err", err)
 			return
+		}
+		for _, rc := range sub.Reasons {
+			if rc >= 0x80 {
+				rerr := &refusedError{what: "subscribe to " + filter, code: rc}
+				u.log.Warn("subscribe to commands refused", "err", rerr)
+				u.noteRefusal(filter, rerr)
+				return
+			}
 		}
 		u.connected.Store(true)
 		u.log.Info("connected to broker", "broker", u.opts.BrokerURL)
@@ -392,11 +433,14 @@ func (u *Uplink) base() context.Context {
 
 func (u *Uplink) publishVia(ctx context.Context, cm *autopaho.ConnectionManager, topic string, payload []byte, retain bool) error {
 	resp, err := cm.Publish(ctx, &paho.Publish{Topic: topic, Payload: payload, QoS: 1, Retain: retain})
+	// paho reports a refusal as an error and a response carrying the code.
+	if resp != nil && resp.ReasonCode >= 0x80 {
+		rerr := &refusedError{what: "publish to " + topic, code: resp.ReasonCode}
+		u.noteRefusal(topic, rerr)
+		return rerr
+	}
 	if err != nil {
 		return err
-	}
-	if resp != nil && resp.ReasonCode >= 0x80 {
-		return fmt.Errorf("broker refused publish to %s: reason 0x%02x", topic, resp.ReasonCode)
 	}
 	u.mu.Lock()
 	u.lastPublish = u.now()
@@ -571,5 +615,136 @@ func (u *Uplink) prune(ctx context.Context) {
 
 // scope is the topic tree of this device: V2 when it holds a user id.
 func (u *Uplink) scope() contract.Scope {
+	if u.v1Fallback.Load() {
+		return contract.Scope{DeviceID: u.opts.DeviceID}
+	}
 	return contract.Scope{DeviceID: u.opts.DeviceID, UserID: u.opts.UserID}
+}
+
+// reasonNotAuthorized is the MQTT 5 reason code for a refused topic or login.
+const reasonNotAuthorized = 0x87
+
+// refusedError is a broker refusal (a reason code of 0x80 or more).
+type refusedError struct {
+	what string
+	code byte
+}
+
+func (e *refusedError) Error() string {
+	return fmt.Sprintf("broker refused %s: reason 0x%02x", e.what, e.code)
+}
+
+// noteRefusal falls back to the v1 topics when the broker refuses something on
+// the V2 tree as not authorized: the connect (it checks the will topic), the
+// command subscription or a publish. A refusal on a v1 topic, or any other
+// reason, changes nothing. This is how a gateway keeps working if the server's
+// V2 rules are not in place yet, or the owner it believes in has changed.
+func (u *Uplink) noteRefusal(topic string, err error) {
+	var re *refusedError
+	if !errors.As(err, &re) || re.code != reasonNotAuthorized {
+		return
+	}
+	if !strings.HasPrefix(topic, contract.TopicPrefixV2+"/") || !u.scope().V2() {
+		return
+	}
+	if !u.v1Fallback.CompareAndSwap(false, true) {
+		return
+	}
+	u.log.Warn("the broker refused the V2 topics, falling back to the v1 topics", "err", err)
+	go u.switchToV1()
+}
+
+// V1FallbackKey is the store key that remembers a refusal, so a gateway the
+// broker keeps refusing does not retry V2 on every start. V2 is tried again
+// after V1FallbackFor.
+const (
+	V1FallbackKey = "v2_refused"
+	V1FallbackFor = 24 * time.Hour
+)
+
+// switchToV1 moves everything queued for the V2 tree off it and reconnects
+// with the v1 will and subscription. Messages that cannot be republished on v1
+// are dropped (a v2 obs is a different shape): the observation cursor is
+// rewound so the next cycle rebuilds those buckets in the v1 shape.
+func (u *Uplink) switchToV1() {
+	ctx := u.base()
+	if ctx == nil {
+		return
+	}
+	u.connected.Store(false)
+	mark := fmt.Sprintf("%d %s", u.opts.UserID, u.now().UTC().Format(time.RFC3339))
+	if err := u.opts.Store.Set(ctx, V1FallbackKey, mark); err != nil {
+		u.log.Warn("could not remember the V2 refusal", "err", err)
+	}
+	if err := u.dropV2Outbox(ctx); err != nil {
+		u.log.Error("move the outbox to the v1 topics failed", "err", err)
+	}
+	var old *autopaho.ConnectionManager
+	for range 20 { // a connect refusal can arrive before Run has stored the manager
+		u.mu.Lock()
+		old = u.cm
+		u.cm = nil
+		u.mu.Unlock()
+		if old != nil || ctx.Err() != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if old != nil {
+		dctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		if err := old.Disconnect(dctx); err != nil {
+			u.log.Debug("disconnect before the v1 fallback", "err", err)
+		}
+		cancel()
+	}
+	if err := u.connect(ctx); err != nil {
+		u.log.Error("reconnect on the v1 topics failed", "err", err)
+	}
+}
+
+// dropV2Outbox deletes the queued V2 messages and rewinds the cursor to the
+// first dropped observation bucket.
+func (u *Uplink) dropV2Outbox(ctx context.Context) error {
+	u.buildMu.Lock()
+	defer u.buildMu.Unlock()
+	items, err := u.opts.Store.Pending(ctx, 100000)
+	if err != nil {
+		return err
+	}
+	var drop []int64
+	var earliest time.Time
+	for _, it := range items {
+		if !strings.HasPrefix(it.Topic, contract.TopicPrefixV2+"/") {
+			continue
+		}
+		drop = append(drop, it.Seq)
+		if it.Kind != store.KindObs {
+			continue
+		}
+		var m struct {
+			Buckets []struct {
+				Start time.Time `json:"start"`
+			} `json:"buckets"`
+		}
+		if json.Unmarshal(it.Payload, &m) == nil && len(m.Buckets) > 0 {
+			if first := m.Buckets[0].Start; earliest.IsZero() || first.Before(earliest) {
+				earliest = first
+			}
+		}
+	}
+	if err := u.opts.Store.Ack(ctx, drop...); err != nil {
+		return err
+	}
+	if earliest.IsZero() {
+		return nil
+	}
+	st, err := u.loadState(ctx)
+	if err != nil {
+		return err
+	}
+	if earliest.Before(st.BuiltThrough) {
+		st.BuiltThrough = earliest
+		return u.saveState(ctx, st)
+	}
+	return nil
 }

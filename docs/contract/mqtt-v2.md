@@ -133,21 +133,41 @@ per station and timestamp when the station is also heard over APRS: the direct
 upload wins, and the first copy to arrive is kept until the direct one does.
 See the server documentation for the rules and their limits.
 
+## Moving a gateway to V2 without a re-claim
+
+A gateway claimed before the server returned `user_id` holds a credential and no
+user id. It learns it by calling `GET /pws/device/identity` with HTTP Basic
+(`device_id` and the same password it uses for the broker). The server answers
+`{device_id, user_id, credential_version}`, or the same 401 for any bad
+credential. The gateway asks once before it first connects after an update and
+every 6 hours; when the id differs from the stored one it rewrites its credential
+file (mode 0600, other fields kept) and restarts its uplink on the V2 topics.
+A signed `config` command was rejected for this: it must be queued and signed
+per device and can only arrive while the gateway is already connected, and it
+would need a trigger, whereas this reuses the credential check the broker
+already does and needs no new secret.
+
+Fallback: if the broker refuses the V2 tree as not authorized (the connect, the
+command subscription or a publish, reason 0x87), the gateway switches to the v1
+topics, reconnects with the v1 will and subscription, drops what it had queued
+for V2 and rebuilds those buckets in the v1 shape (nothing is lost), and
+remembers the refusal for 24 hours for that user id. A device whose owner
+changes gets a new credential and user id; the server stops authorizing the old
+owner's namespace at once, so a stale device falls back instead of publishing
+into it.
+
+## Choosing the sensor for each group
+
+The Stations page shows "Which station supplies each reading" when two or more
+selected stations report the same group. The choice is the `composite` config
+section; unchosen ambiguous groups are left out and flagged.
+
 ## Rollout
 
-1. Server first: the API returns `user_id` and authorises both trees, the broker
+1. Server first: the API returns `user_id` and authorizes both trees, the broker
    ACL for the ingest account is widened, the ingest worker subscribes to both.
    Nothing changes for a v1 gateway.
 2. Then the gateway firmware. A gateway uses V2 once its credential carries
-   `user_id` (a fresh claim). The single existing gateway stays on v1 until it
-   is re-claimed or a later release adds a credential refresh.
+   `user_id`: from a fresh claim, or, for the gateway already in the field, from
+   the identity call above on its first start after the update.
 3. When the last v1 gateway has updated, v1 can be retired.
-
-## Unfinished on the device
-
-- The settings screen for `composite` (choosing the sensor per group) is not
-  built. The value can be set through `PUT /api/config/composite` or a signed
-  `config` command with a `composite` section. The Stations page already has the
-  per sensor field checklist; the per group choice belongs next to it.
-- A gateway claimed before the server returned `user_id` has no way to learn it
-  without a re-claim.

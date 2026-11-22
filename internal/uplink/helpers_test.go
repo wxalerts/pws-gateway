@@ -70,6 +70,9 @@ func testKey(t *testing.T) ed25519.PrivateKey {
 }
 
 func quietLogger() *slog.Logger {
+	if os.Getenv("PWS_TEST_LOG") != "" {
+		return slog.New(slog.NewTextHandler(os.Stderr, nil))
+	}
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
@@ -90,7 +93,12 @@ type testBroker struct {
 
 // newBroker starts an in-process MQTT 5 broker on a free loopback port that
 // records every publish, retained or not.
-func newBroker(t *testing.T) *testBroker {
+func newBroker(t *testing.T) *testBroker { return newBrokerWith(t, new(auth.AllowHook)) }
+
+// newBrokerWith starts the broker with the given auth hook instead of
+// allow-all, so a test can refuse topics (mochi lets any hook that allows win,
+// so the allow-all hook must not be present).
+func newBrokerWith(t *testing.T, hook mqtt.Hook) *testBroker {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -101,7 +109,7 @@ func newBroker(t *testing.T) *testBroker {
 		t.Fatal(err)
 	}
 	srv := mqtt.New(&mqtt.Options{InlineClient: true, Logger: quietLogger()})
-	if err := srv.AddHook(new(auth.AllowHook), nil); err != nil {
+	if err := srv.AddHook(hook, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := srv.AddListener(listeners.NewTCP(listeners.Config{ID: "t", Address: addr})); err != nil {
