@@ -11,7 +11,8 @@ password ever living on the device.
   wxalerts.org while logged in. Authentik authorizes the claim.
 - Server issues per-device MQTT credentials (client ID = device ID).
 - EMQX ACL: device may publish only to `pws/{device_id}/#` and subscribe only
-  to `pws/{device_id}/cmd/#`.
+  to `pws/{device_id}/cmd/#`. Contract v2 adds the same rule under
+  `V2/{user_id}/PWS/{device_id}/` (see `docs/contract/mqtt-v2.md`).
 - LWT on `pws/{device_id}/status` for offline detection. Retained `online`
   message on connect.
 - Revoke: owner can unlink a device from the dashboard. Credentials rotate on
@@ -37,8 +38,10 @@ Code: `internal/claim/`, `internal/web/handlers_claim.go`,
   verification_uri_complete, expires_in, interval}`. `POST /pws/claim/poll`
   with `{device_code}` answers 400 `authorization_pending`, `slow_down` (with
   the new `interval`), `expired_token` or `access_denied`, or 200 once with
-  `{device_id, mqtt: {url, host, port, transport, path, username, client_id,
-  password}, credential_version}`. A 409 `already_claimed` from start means
+  `{device_id, user_id, mqtt: {url, host, port, transport, path, username, client_id,
+  password}, credential_version}`. `user_id` is the owner's numeric account id and selects
+  the V2 topics; a server that does not send it leaves the device on v1. A gateway that predates `user_id` learns it with `GET /pws/device/identity` (HTTP Basic with its own credential); see
+  `docs/contract/mqtt-v2.md`. A 409 `already_claimed` from start means
   the server still lists this hardware; the owner removes it on the WxAlerts
   site first. The owner approves the code at `https://wxalerts.org/pws/claim`.
 - Hardware id: `hw_id = "hw1_" + hex(SHA-256("wxalerts-pws-hwid-v1" NUL

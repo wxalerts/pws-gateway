@@ -55,12 +55,18 @@ type Config struct {
 	Web           Web                `json:"web"`
 	Radios        []Radio            `json:"radios"`
 	Stations      map[string]Station `json:"stations"`
-	Uplink        Uplink             `json:"uplink"`
-	History       History            `json:"history"`
-	Network       Network            `json:"network"`
-	Updates       Updates            `json:"updates"`
-	HomeAssistant HomeAssistant      `json:"homeassistant"`
-	Relay         Relay              `json:"relay"`
+	// Composite maps a field group (see FieldGroups) to the station key that
+	// supplies it in the combined record the gateway uplinks. A group with no
+	// entry uses the only selected station that reports it; with several and
+	// no entry the group is left out. Contract v2 moved this choice from the
+	// server to the device.
+	Composite     map[string]string `json:"composite,omitempty"`
+	Uplink        Uplink            `json:"uplink"`
+	History       History           `json:"history"`
+	Network       Network           `json:"network"`
+	Updates       Updates           `json:"updates"`
+	HomeAssistant HomeAssistant     `json:"homeassistant"`
+	Relay         Relay             `json:"relay"`
 }
 
 // Web configures the local HTTPS server.
@@ -204,6 +210,23 @@ type Relay struct {
 	CWOP cwop.Config `json:"cwop"`
 }
 
+// GroupNames lists the field groups of the combined record in a stable order.
+var GroupNames = []string{"temperature", "humidity", "pressure", "wind", "rain", "solar_uv", "lightning"}
+
+// FieldGroups maps a group to the canonical fields it carries. A group is
+// supplied by one station as a whole, so wind speed, gust and direction never
+// come from different anemometers. The same map was used on the server for
+// the composite station (pws_composite_fields).
+var FieldGroups = map[string][]string{
+	"temperature": {"temp_c"},
+	"humidity":    {"humidity_pct"},
+	"pressure":    {"pressure_station_hpa"},
+	"wind":        {"wind_speed_ms", "wind_gust_ms", "wind_dir_deg"},
+	"rain":        {"rain_mm"},
+	"solar_uv":    {"uv_index", "light_lux", "solar_wm2"},
+	"lightning":   {"lightning_count", "lightning_km"},
+}
+
 // Defaults returns the configuration a fresh install starts from.
 func Defaults() Config {
 	return Config{
@@ -225,7 +248,7 @@ func Defaults() Config {
 }
 
 // Sections lists the valid section names in file order.
-var Sections = []string{"web", "radios", "stations", "uplink", "history", "network", "updates", "homeassistant", "relay"}
+var Sections = []string{"web", "radios", "stations", "composite", "uplink", "history", "network", "updates", "homeassistant", "relay"}
 
 // ValidationError collects every problem found so the UI can show them all.
 type ValidationError struct {
@@ -257,6 +280,7 @@ func (c *Config) Validate() error {
 	c.validateWeb(&ve)
 	c.validateRadios(&ve)
 	c.validateStations(&ve)
+	c.validateComposite(&ve)
 	c.validateUplink(&ve)
 	c.validateNetwork(&ve)
 	c.validateUpdates(&ve)
@@ -316,6 +340,17 @@ func (c *Config) validateStations(ve *ValidationError) {
 		}
 		if s.WindHeightM < 0 || s.WindHeightM > 100 {
 			ve.add("stations[%s].wind_height_m %v out of range", key, s.WindHeightM)
+		}
+	}
+}
+
+func (c *Config) validateComposite(ve *ValidationError) {
+	for group, key := range c.Composite {
+		if _, ok := FieldGroups[group]; !ok {
+			ve.add("composite has unknown group %q", group)
+		}
+		if !reKey.MatchString(key) {
+			ve.add("composite[%s] %q is not a valid station key", group, key)
 		}
 	}
 }

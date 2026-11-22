@@ -14,7 +14,7 @@ import (
 // telCycle builds and enqueues one tel message from platform health, time
 // sync, the outbox state and the radio list.
 func (u *Uplink) telCycle(ctx context.Context) error {
-	return u.publishMessage(ctx, contract.Topic(u.opts.DeviceID, contract.KindTel), u.buildTel(ctx))
+	return u.publishMessage(ctx, u.scope().Topic(contract.KindTel), u.buildTel(ctx))
 }
 
 func (u *Uplink) buildTel(ctx context.Context) *contract.Tel {

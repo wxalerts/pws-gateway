@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,8 +36,11 @@ const (
 	NormalBuckets = 3
 	// MaxReplayBuckets is the most buckets in one message on a backlog.
 	MaxReplayBuckets = 20
-	// ReplayInterval is the minimum gap between outbox publishes.
-	ReplayInterval = time.Second
+	// ReplayInterval is the minimum gap between outbox publishes: one message
+	// every 15 seconds, which is the server limit of 4 messages a minute per
+	// device. A replay therefore paces itself to the limit instead of relying
+	// on the server to exempt bursts (docs/contract/mqtt-v2.md, rate limit).
+	ReplayInterval = 15 * time.Second
 	// TimeUnsyncedAfter is how long the clock may stay unsynced after start
 	// before a time_unsynced event is published.
 	TimeUnsyncedAfter = 10 * time.Minute
@@ -68,6 +72,10 @@ type Collector interface {
 // Options configures an Uplink. Zero values take the defaults noted.
 type Options struct {
 	DeviceID string
+	// UserID is the owner's numeric account id from the claim response. When
+	// it is set the uplink uses the V2 topic tree and the V2 obs record; when
+	// it is 0 (an older claim) it keeps the v1 topics and the v1 obs shape.
+	UserID int64
 	// BrokerURL is mqtts://host:port (or mqtt:// for tests). Not needed in
 	// DryRun.
 	BrokerURL   string
@@ -136,8 +144,11 @@ type Uplink struct {
 
 	buildMu sync.Mutex // serializes obs building and the uplink_state key
 
-	gateMu         sync.Mutex // guards the time gate fields
-	unsyncedSince  time.Time
+	gateMu        sync.Mutex // guards the time gate fields
+	unsyncedSince time.Time
+	// v1Fallback is set when the broker refused the V2 topics; scope() then
+	// returns the v1 tree until the process restarts (or V1FallbackFor passes).
+	v1Fallback     atomic.Bool
 	unsyncedEvent  bool
 	wasSynced      bool
 	overflowActive bool
@@ -188,7 +199,29 @@ func New(opts Options) (*Uplink, error) {
 		replay:   &kvReplayCache{store: opts.Store, now: opts.Now},
 	}
 	u.unsyncedSince = u.now()
+	u.restoreFallback()
 	return u, nil
+}
+
+// restoreFallback starts on the v1 topics when a recent run was refused on the
+// V2 ones for this same user id. The marker expires after V1FallbackFor so a
+// server that has since been fixed is tried again.
+func (u *Uplink) restoreFallback() {
+	if u.opts.UserID <= 0 || u.opts.Store == nil {
+		return
+	}
+	v, ok, err := u.opts.Store.Get(context.Background(), V1FallbackKey)
+	if err != nil || !ok {
+		return
+	}
+	var uid int64
+	var at string
+	if _, err := fmt.Sscanf(v, "%d %s", &uid, &at); err != nil || uid != u.opts.UserID {
+		return
+	}
+	if t, err := time.Parse(time.RFC3339, at); err == nil && u.now().Sub(t) < V1FallbackFor {
+		u.v1Fallback.Store(true)
+	}
 }
 
 // Status reports the connection state.
@@ -240,7 +273,7 @@ func (u *Uplink) PublishUpdate(ctx context.Context) {
 	}
 	pctx, cancel := context.WithTimeout(ctx, publishTimeout)
 	defer cancel()
-	if err := u.publishVia(pctx, cm, contract.Topic(u.opts.DeviceID, contract.KindUpdate), data, true); err != nil {
+	if err := u.publishVia(pctx, cm, u.scope().Topic(contract.KindUpdate), data, true); err != nil {
 		u.log.Warn("publish update failed", "err", err)
 	}
 }
@@ -310,7 +343,7 @@ func (u *Uplink) connect(ctx context.Context) error {
 		ReconnectBackoff:              func(attempt int) time.Duration { return Backoff(attempt, u.opts.Rand) },
 		ConnectTimeout:                15 * time.Second,
 		WillMessage: &paho.WillMessage{
-			Topic: contract.Topic(u.opts.DeviceID, contract.KindStatus), Payload: offline, QoS: 1, Retain: true,
+			Topic: u.scope().Topic(contract.KindStatus), Payload: offline, QoS: 1, Retain: true,
 		},
 		OnConnectionUp: u.onConnectionUp,
 		OnConnectionDown: func() bool {
@@ -318,7 +351,13 @@ func (u *Uplink) connect(ctx context.Context) error {
 			u.log.Warn("broker connection lost")
 			return true
 		},
-		OnConnectError: func(err error) { u.log.Warn("broker connect failed", "err", err) },
+		OnConnectError: func(err error) {
+			u.log.Warn("broker connect failed", "err", err)
+			var ce *autopaho.ConnackError
+			if errors.As(err, &ce) {
+				u.noteRefusal(u.scope().Topic(contract.KindStatus), &refusedError{what: "connect", code: ce.ReasonCode})
+			}
+		},
 		ClientConfig: paho.ClientConfig{
 			ClientID: u.opts.DeviceID,
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
@@ -352,7 +391,7 @@ func (u *Uplink) onConnectionUp(cm *autopaho.ConnectionManager, _ *paho.Connack)
 		defer cancel()
 		online, err := contract.Marshal(statusPtr(contract.StatusOnline))
 		if err == nil {
-			err = u.publishVia(ctx, cm, contract.Topic(u.opts.DeviceID, contract.KindStatus), online, true)
+			err = u.publishVia(ctx, cm, u.scope().Topic(contract.KindStatus), online, true)
 		}
 		if err != nil {
 			u.log.Warn("publish online status failed", "err", err)
@@ -361,15 +400,24 @@ func (u *Uplink) onConnectionUp(cm *autopaho.ConnectionManager, _ *paho.Connack)
 		upd := u.UpdateMessage()
 		if data, merr := contract.Marshal(&upd); merr != nil {
 			u.log.Error("build update message", "err", merr)
-		} else if perr := u.publishVia(ctx, cm, contract.Topic(u.opts.DeviceID, contract.KindUpdate), data, true); perr != nil {
+		} else if perr := u.publishVia(ctx, cm, u.scope().Topic(contract.KindUpdate), data, true); perr != nil {
 			u.log.Warn("publish update failed", "err", perr)
 		}
-		_, err = cm.Subscribe(ctx, &paho.Subscribe{Subscriptions: []paho.SubscribeOptions{
-			{Topic: contract.CommandFilter(u.opts.DeviceID), QoS: 1},
+		filter := u.scope().CommandFilter()
+		sub, err := cm.Subscribe(ctx, &paho.Subscribe{Subscriptions: []paho.SubscribeOptions{
+			{Topic: filter, QoS: 1},
 		}})
 		if err != nil {
 			u.log.Warn("subscribe to commands failed", "err", err)
 			return
+		}
+		for _, rc := range sub.Reasons {
+			if rc >= 0x80 {
+				rerr := &refusedError{what: "subscribe to " + filter, code: rc}
+				u.log.Warn("subscribe to commands refused", "err", rerr)
+				u.noteRefusal(filter, rerr)
+				return
+			}
 		}
 		u.connected.Store(true)
 		u.log.Info("connected to broker", "broker", u.opts.BrokerURL)
@@ -385,11 +433,14 @@ func (u *Uplink) base() context.Context {
 
 func (u *Uplink) publishVia(ctx context.Context, cm *autopaho.ConnectionManager, topic string, payload []byte, retain bool) error {
 	resp, err := cm.Publish(ctx, &paho.Publish{Topic: topic, Payload: payload, QoS: 1, Retain: retain})
+	// paho reports a refusal as an error and a response carrying the code.
+	if resp != nil && resp.ReasonCode >= 0x80 {
+		rerr := &refusedError{what: "publish to " + topic, code: resp.ReasonCode}
+		u.noteRefusal(topic, rerr)
+		return rerr
+	}
 	if err != nil {
 		return err
-	}
-	if resp != nil && resp.ReasonCode >= 0x80 {
-		return fmt.Errorf("broker refused publish to %s: reason 0x%02x", topic, resp.ReasonCode)
 	}
 	u.mu.Lock()
 	u.lastPublish = u.now()
@@ -410,7 +461,7 @@ func (u *Uplink) shutdown() {
 	defer cancel()
 	if u.connected.Load() {
 		if off, err := contract.Marshal(statusPtr(contract.StatusOffline)); err == nil {
-			if err := u.publishVia(ctx, cm, contract.Topic(u.opts.DeviceID, contract.KindStatus), off, true); err != nil {
+			if err := u.publishVia(ctx, cm, u.scope().Topic(contract.KindStatus), off, true); err != nil {
 				u.log.Debug("publish offline status failed", "err", err)
 			}
 		}
@@ -492,7 +543,7 @@ func (u *Uplink) Emit(ctx context.Context, typ string, detail map[string]any) {
 		raw = b
 	}
 	ev := &contract.Event{V: contract.Version, DeviceID: u.opts.DeviceID, TS: u.now().UTC().Truncate(time.Second), Type: typ, Detail: raw}
-	if err := u.publishMessage(ctx, contract.Topic(u.opts.DeviceID, contract.KindEvent), ev); err != nil {
+	if err := u.publishMessage(ctx, u.scope().Topic(contract.KindEvent), ev); err != nil {
 		u.log.Error("queue event failed", "type", typ, "err", err)
 	}
 }
@@ -560,4 +611,140 @@ func (u *Uplink) prune(ctx context.Context) {
 			"dropped": dropped, "dropped_obs": res.DroppedObs,
 		})
 	}
+}
+
+// scope is the topic tree of this device: V2 when it holds a user id.
+func (u *Uplink) scope() contract.Scope {
+	if u.v1Fallback.Load() {
+		return contract.Scope{DeviceID: u.opts.DeviceID}
+	}
+	return contract.Scope{DeviceID: u.opts.DeviceID, UserID: u.opts.UserID}
+}
+
+// reasonNotAuthorized is the MQTT 5 reason code for a refused topic or login.
+const reasonNotAuthorized = 0x87
+
+// refusedError is a broker refusal (a reason code of 0x80 or more).
+type refusedError struct {
+	what string
+	code byte
+}
+
+func (e *refusedError) Error() string {
+	return fmt.Sprintf("broker refused %s: reason 0x%02x", e.what, e.code)
+}
+
+// noteRefusal falls back to the v1 topics when the broker refuses something on
+// the V2 tree as not authorized: the connect (it checks the will topic), the
+// command subscription or a publish. A refusal on a v1 topic, or any other
+// reason, changes nothing. This is how a gateway keeps working if the server's
+// V2 rules are not in place yet, or the owner it believes in has changed.
+func (u *Uplink) noteRefusal(topic string, err error) {
+	var re *refusedError
+	if !errors.As(err, &re) || re.code != reasonNotAuthorized {
+		return
+	}
+	if !strings.HasPrefix(topic, contract.TopicPrefixV2+"/") || !u.scope().V2() {
+		return
+	}
+	if !u.v1Fallback.CompareAndSwap(false, true) {
+		return
+	}
+	u.log.Warn("the broker refused the V2 topics, falling back to the v1 topics", "err", err)
+	go u.switchToV1()
+}
+
+// V1FallbackKey is the store key that remembers a refusal, so a gateway the
+// broker keeps refusing does not retry V2 on every start. V2 is tried again
+// after V1FallbackFor.
+const (
+	V1FallbackKey = "v2_refused"
+	V1FallbackFor = 24 * time.Hour
+)
+
+// switchToV1 moves everything queued for the V2 tree off it and reconnects
+// with the v1 will and subscription. Messages that cannot be republished on v1
+// are dropped (a v2 obs is a different shape): the observation cursor is
+// rewound so the next cycle rebuilds those buckets in the v1 shape.
+func (u *Uplink) switchToV1() {
+	ctx := u.base()
+	if ctx == nil {
+		return
+	}
+	u.connected.Store(false)
+	mark := fmt.Sprintf("%d %s", u.opts.UserID, u.now().UTC().Format(time.RFC3339))
+	if err := u.opts.Store.Set(ctx, V1FallbackKey, mark); err != nil {
+		u.log.Warn("could not remember the V2 refusal", "err", err)
+	}
+	if err := u.dropV2Outbox(ctx); err != nil {
+		u.log.Error("move the outbox to the v1 topics failed", "err", err)
+	}
+	var old *autopaho.ConnectionManager
+	for range 20 { // a connect refusal can arrive before Run has stored the manager
+		u.mu.Lock()
+		old = u.cm
+		u.cm = nil
+		u.mu.Unlock()
+		if old != nil || ctx.Err() != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if old != nil {
+		dctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		if err := old.Disconnect(dctx); err != nil {
+			u.log.Debug("disconnect before the v1 fallback", "err", err)
+		}
+		cancel()
+	}
+	if err := u.connect(ctx); err != nil {
+		u.log.Error("reconnect on the v1 topics failed", "err", err)
+	}
+}
+
+// dropV2Outbox deletes the queued V2 messages and rewinds the cursor to the
+// first dropped observation bucket.
+func (u *Uplink) dropV2Outbox(ctx context.Context) error {
+	u.buildMu.Lock()
+	defer u.buildMu.Unlock()
+	items, err := u.opts.Store.Pending(ctx, 100000)
+	if err != nil {
+		return err
+	}
+	var drop []int64
+	var earliest time.Time
+	for _, it := range items {
+		if !strings.HasPrefix(it.Topic, contract.TopicPrefixV2+"/") {
+			continue
+		}
+		drop = append(drop, it.Seq)
+		if it.Kind != store.KindObs {
+			continue
+		}
+		var m struct {
+			Buckets []struct {
+				Start time.Time `json:"start"`
+			} `json:"buckets"`
+		}
+		if json.Unmarshal(it.Payload, &m) == nil && len(m.Buckets) > 0 {
+			if first := m.Buckets[0].Start; earliest.IsZero() || first.Before(earliest) {
+				earliest = first
+			}
+		}
+	}
+	if err := u.opts.Store.Ack(ctx, drop...); err != nil {
+		return err
+	}
+	if earliest.IsZero() {
+		return nil
+	}
+	st, err := u.loadState(ctx)
+	if err != nil {
+		return err
+	}
+	if earliest.Before(st.BuiltThrough) {
+		st.BuiltThrough = earliest
+		return u.saveState(ctx, st)
+	}
+	return nil
 }

@@ -65,7 +65,9 @@ func (u *Uplink) reconcile(ctx context.Context) error {
 	}
 	changed := false
 	for _, it := range items {
-		if it.Topic != contract.Topic(u.opts.DeviceID, contract.KindObs) {
+		// Either tree: a message queued before the device moved to V2 is
+		// still adopted.
+		if it.Topic != u.scope().Topic(contract.KindObs) && it.Topic != contract.Topic(u.opts.DeviceID, contract.KindObs) {
 			continue
 		}
 		var m contract.Obs

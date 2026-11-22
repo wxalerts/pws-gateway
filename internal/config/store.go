@@ -166,6 +166,9 @@ func (c *Config) applySection(section string, raw json.RawMessage) error {
 	case "stations":
 		c.Stations = nil
 		target = &c.Stations
+	case "composite":
+		c.Composite = nil
+		target = &c.Composite
 	case "uplink":
 		target = &c.Uplink
 	case "history":

@@ -76,7 +76,10 @@ type mqttReply struct {
 // pollReply is the union of the poll bodies: the 200 credentials, or the 400
 // error with an optional new interval.
 type pollReply struct {
-	DeviceID          string    `json:"device_id"`
+	DeviceID string `json:"device_id"`
+	// UserID is the owner's numeric account id. A server that predates
+	// contract v2 does not send it; 0 then keeps the device on the v1 topics.
+	UserID            int64     `json:"user_id"`
 	MQTT              mqttReply `json:"mqtt"`
 	CredentialVersion int       `json:"credential_version"`
 	Error             string    `json:"error"`
@@ -211,4 +214,54 @@ func (c *client) poll(ctx context.Context, deviceCode string) (pollKind, pollRep
 	default:
 		return pollFatal, rep, 0
 	}
+}
+
+// ErrCredentialRejected means the server did not accept the gateway's
+// credential (unlinked, rotated or unknown). It says nothing about the owner.
+var ErrCredentialRejected = errors.New("claim: the server rejected this gateway's credential")
+
+// identityReply is the 200 body of GET /pws/device/identity.
+type identityReply struct {
+	DeviceID string `json:"device_id"`
+	UserID   int64  `json:"user_id"`
+}
+
+// identity asks the server who owns the gateway, authenticating with the
+// gateway's own MQTT credential (HTTP Basic over TLS).
+func (c *client) identity(ctx context.Context, deviceID, password string) (int64, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/pws/device/identity", nil)
+	if err != nil {
+		return 0, err
+	}
+	req.SetBasicAuth(deviceID, password)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %s", ErrUnavailable, shortErr(err))
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return 0, fmt.Errorf("%w: %s", ErrUnavailable, shortErr(err))
+	}
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var rep identityReply
+		if err := json.Unmarshal(raw, &rep); err != nil || rep.UserID <= 0 || rep.DeviceID != deviceID {
+			return 0, fmt.Errorf("%w: unreadable reply", ErrUnavailable)
+		}
+		return rep.UserID, nil
+	case http.StatusUnauthorized:
+		return 0, ErrCredentialRejected
+	default:
+		return 0, fmt.Errorf("%w: status %d", ErrUnavailable, resp.StatusCode)
+	}
+}
+
+// Identity returns the numeric account id of the account that owns this
+// gateway, from GET /pws/device/identity.
+func (m *Manager) Identity(ctx context.Context, deviceID, password string) (int64, error) {
+	return m.api.identity(ctx, deviceID, password)
 }

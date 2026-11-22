@@ -1,5 +1,8 @@
 # MQTT contract (v1 draft)
 
+Contract v2 (per account topics, one combined record per bucket) is described in
+[mqtt-v2.md](mqtt-v2.md). This page stays valid for gateways on old firmware.
+
 Snapshot of the Notion page "MQTT Contract (v1 draft)" taken 2026-11-16. This
 copy is authoritative from now on; Notion is no longer updated.
 
@@ -228,11 +231,11 @@ schema:
 
 - Final canonical field list once the first sensor test matrix is done.
 - Outbox overflow numbers are proposed above. Validate them in the spike.
-- The replay rate (1 message per second) exceeds the server rate limit (4
-  messages per minute per device). The Notion page states both without
-  reconciling them. Either the broker exempts replay bursts, or replay must
-  pace itself to the rate limit, or the rate limit applies to a rolling window
-  larger than a minute. Decide in the M4 spike.
+- The replay rate (1 message per second) exceeded the server rate limit (4
+  messages per minute per device). Resolved in [contract v2](mqtt-v2.md): the
+  device paces replay to one message every 15 seconds, and the server needs no
+  exemption. The v1 gateway firmware that still replays at 1 per second is the
+  case the server must tolerate until it updates.
 - The canonical JSON form used for the command signature is not named. The
   schema work needs one (RFC 8785 JCS is the obvious candidate); the Notion page
   does not pick it.

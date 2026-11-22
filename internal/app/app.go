@@ -272,8 +272,19 @@ func (a *App) Run(ctx context.Context) error {
 	}
 	a.upMu.Lock()
 	a.runCtx = ctx
+	a.upMu.Unlock()
+	// A gateway claimed before contract v2 has no owner id: ask once before
+	// connecting so it comes up on the V2 topics straight away.
+	if a.refreshIdentity(ctx) {
+		a.upMu.Lock()
+		a.uplink.Store(nil)
+		a.setupUplink()
+		a.upMu.Unlock()
+	}
+	a.upMu.Lock()
 	a.launchUplinkLocked()
 	a.upMu.Unlock()
+	wg.Go(func() { a.runIdentity(ctx) })
 	wg.Go(func() { a.claim.Run(ctx) })
 	wg.Go(func() { a.runHardware(ctx) })
 	wg.Go(func() { a.cwop.Run(ctx) })

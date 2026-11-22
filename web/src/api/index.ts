@@ -58,6 +58,11 @@ export const api = {
   },
   config: {
     get: (opts?: RequestOptions) => http.get<Config>('/api/config', opts),
+    composite: async (opts?: RequestOptions): Promise<Record<string, string>> => {
+      const cfg = await http.get<Config>('/api/config', opts);
+      const c = cfg.composite;
+      return c && typeof c === 'object' ? (c as Record<string, string>) : {};
+    },
     putSection: (section: string, value: Record<string, unknown>) =>
       http.put<unknown>(`/api/config/${encodeURIComponent(section)}`, value),
     apply: () => http.post<ApplyResult>('/api/config/apply'),

@@ -1,0 +1,35 @@
+{
+  "v": 2,
+  "device_id": "d_8f3a",
+  "seq": 1234,
+  "sent": "2026-11-16T14:15:03Z",
+  "interval_s": 300,
+  "buckets": [
+    {
+      "start": "2026-11-16T14:00:00Z",
+      "live": true,
+      "synced": true,
+      "n": 19,
+      "meta": { "alt_m": 31.0, "wind_height_m": 4.5 },
+      "f": {
+        "temp_c": { "avg": 18.2, "min": 17.9, "max": 18.6 },
+        "humidity_pct": { "avg": 64 },
+        "pressure_station_hpa": { "avg": 1008.3 },
+        "wind_speed_ms": { "avg": 2.1 },
+        "wind_gust_ms": { "max": 4.8 },
+        "wind_dir_deg": { "vec": 212 },
+        "rain_mm": { "sum": 0.0 },
+        "uv_index": { "avg": 3.1 },
+        "battery_ok": { "last": 1 }
+      },
+      "src": {
+        "temp_c": "Acurite-5n1:1234:A",
+        "humidity_pct": "Acurite-5n1:1234:A",
+        "wind_speed_ms": "Acurite-5n1:1234:A",
+        "uv_index": "Fineoffset-WH24:77:"
+      },
+      "sig": { "rssi_db": -61.2, "snr_db": 19.4 },
+      "raw": { "Acurite-5n1:1234:A": { "sequence_num": 2, "mic": "CHECKSUM" } }
+    }
+  ]
+}

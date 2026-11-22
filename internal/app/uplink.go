@@ -62,6 +62,7 @@ func (a *App) setupUplink() {
 			return
 		}
 		opts.Credentials = cred
+		opts.UserID = cred.UserID
 		if ca := filepath.Join(a.deps.DataDir, caFileName); fileExists(ca) {
 			opts.CAFile = ca
 		}
@@ -178,5 +179,73 @@ func (a *App) updateStatus() (web.UpdateStatus, bool) {
 func (a *App) noteSDRMissing(e rtl433.Event) {
 	if u := a.uplink.Load(); u != nil {
 		u.EmitThrottled(context.Background(), contract.EventSDRMissing, e.Radio, sdrMissingEvery, map[string]any{"radio": e.Radio})
+	}
+}
+
+// identityEvery is how often a running gateway asks the server who owns it. It
+// is also how a gateway claimed before contract v2, which holds a credential but
+// no user id, moves to the V2 topics without a re-claim.
+const identityEvery = 6 * time.Hour
+
+// refreshIdentity asks the server for the owner's user id with the gateway's own
+// credential and rewrites the credential file when it differs. It reports
+// whether the stored id changed. A server that cannot be reached, a rejected
+// credential or a dry run change nothing.
+func (a *App) refreshIdentity(ctx context.Context) bool {
+	cfg := a.deps.Config.Get().Uplink
+	if cfg.DeviceID == "" || a.deps.UplinkDryRun || a.claim == nil {
+		return false
+	}
+	path := a.credentialPath(cfg)
+	if path == "" {
+		return false
+	}
+	cred, err := uplink.LoadCredentials(path)
+	if err != nil {
+		return false
+	}
+	rctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	id, err := a.claim.Identity(rctx, cfg.DeviceID, cred.Password)
+	switch {
+	case errors.Is(err, claim.ErrCredentialRejected):
+		a.log.Warn("the server does not accept this gateway's credential, owner id not refreshed")
+		return false
+	case err != nil:
+		a.log.Info("could not ask the server who owns this gateway", "err", err)
+		return false
+	case id == cred.UserID:
+		return false
+	}
+	cred.UserID = id
+	if err := uplink.SaveCredentials(path, cred); err != nil {
+		a.log.Error("could not store the owner id", "err", err)
+		return false
+	}
+	a.log.Info("owner id updated, using the V2 topics from the next connection", "user_id", id)
+	return true
+}
+
+// restartUplink rebuilds the uplink so it picks up a changed credential file.
+func (a *App) restartUplink() {
+	a.stopUplink()
+	a.startUplink()
+}
+
+// runIdentity refreshes the owner id every identityEvery, retrying sooner after
+// a failure to reach the server, and restarts the uplink when it changed (the
+// owner of the gateway changed, or this is the first time the id is known).
+func (a *App) runIdentity(ctx context.Context) {
+	wait := identityEvery
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+		if a.refreshIdentity(ctx) {
+			a.restartUplink()
+		}
+		wait = identityEvery
 	}
 }

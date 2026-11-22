@@ -16,6 +16,7 @@ there is exactly one copy of each schema in this repository.
 | File | Message | Topic |
 | --- | --- | --- |
 | `common.schema.json` | shared `$defs` (device id, station key, timestamp, field types, canonical field list, signature) | none |
+| `obs2.schema.json` | contract v2 observation record, one combined record per bucket (`v` 2) | `V2/{user_id}/PWS/{device_id}/obs` |
 | `status.schema.json` | connection state, a JSON string `"online"` or `"offline"` | `pws/{device_id}/status` (retained) |
 | `obs.schema.json` | observation buckets | `pws/{device_id}/obs` |
 | `tel.schema.json` | device health | `pws/{device_id}/tel` |
@@ -23,6 +24,12 @@ there is exactly one copy of each schema in this repository.
 | `update.schema.json` | version and update state | `pws/{device_id}/update` (retained) |
 | `cmd.schema.json` | signed server to device command | `pws/{device_id}/cmd/{type}` |
 | `ack.schema.json` | command result | `pws/{device_id}/ack/{cmd_id}` |
+
+Contract v2 (see `docs/contract/mqtt-v2.md`) changes only `obs`. The other
+schemas are shared by both topic trees. `obs2.schema.json` is distinguished
+from `obs.schema.json` by `v` (2 versus 0), not by its `$id` directory: the
+`$id` generation segment stays `v0` for the whole file set, and a file for a
+new shape gets a new file name.
 
 Every property carries a `description`, so the schemas double as the field
 reference. Numeric ranges are only constrained where the contract fixes them

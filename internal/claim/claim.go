@@ -472,7 +472,11 @@ func (m *Manager) storeCredentials(rep pollReply) error {
 	if user == "" {
 		user = rep.DeviceID
 	}
-	raw, err := json.Marshal(map[string]string{"username": user, "password": rep.MQTT.Password})
+	body := map[string]any{"username": user, "password": rep.MQTT.Password}
+	if rep.UserID > 0 {
+		body["user_id"] = rep.UserID
+	}
+	raw, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}

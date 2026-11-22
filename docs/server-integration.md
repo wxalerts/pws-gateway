@@ -21,10 +21,13 @@ Source: Device claim and MQTT auth; Server ingest worker (Scale).
       connections.
 - [ ] ACL per device: publish allowed only to `pws/{device_id}/#`, subscribe
       allowed only to `pws/{device_id}/cmd/#`. Deny everything else, including
-      `$share/...` and other devices' prefixes.
+      `$share/...` and other devices' prefixes. Contract v2 adds the same rule
+      under `V2/{user_id}/PWS/{device_id}/`, allowed only while `user_id` is the
+      device's current owner; both trees are served until v1 is retired.
 - [ ] Broker-side limits: max payload 64 KB on `pws/#`, rate limit of 4
-      messages per minute per device (reconcile with replay bursts, see the
-      contract's Open section), connection rate limiting.
+      messages per minute per device (resolved in contract v2: the device paces
+      replay to one message every 15 seconds, see `docs/contract/mqtt-v2.md`),
+      connection rate limiting.
 - [ ] LWT handling: `pws/{device_id}/status` retained, `offline` on
       disconnect.
 - [ ] Credential revocation and rotation on unlink and re-claim.
