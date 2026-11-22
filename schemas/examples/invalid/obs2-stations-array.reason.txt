@@ -1,0 +1,1 @@
+a v2 bucket has no stations[] array: live, synced, n and f are required

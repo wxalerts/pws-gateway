@@ -14,8 +14,14 @@ import (
 	"time"
 )
 
-// Version is the payload version this package produces in the v field.
+// Version is the payload version this package produces in the v field for
+// every message except the V2 obs record.
 const Version = 0
+
+// VersionV2 is the payload version of the V2 obs record (Obs2). It is how a
+// receiver tells the two obs shapes apart: v 0 carries stations[], v 2 carries
+// one combined record per bucket.
+const VersionV2 = 2
 
 // MinAcceptedVersion is the oldest payload version a receiver accepts. The
 // contract says a server accepts v and v-1; while v is 0 there is no older
@@ -39,7 +45,10 @@ type Kind string
 
 // Message kinds.
 const (
-	KindObs    Kind = "obs"
+	KindObs Kind = "obs"
+	// KindObs2 is the V2 obs payload. It shares the topic leaf "obs" with
+	// KindObs; only the payload version tells them apart.
+	KindObs2   Kind = "obs2"
 	KindTel    Kind = "tel"
 	KindUpdate Kind = "update"
 	KindEvent  Kind = "event"
@@ -49,7 +58,7 @@ const (
 )
 
 // Kinds lists every message kind in a stable order.
-var Kinds = []Kind{KindObs, KindTel, KindUpdate, KindEvent, KindStatus, KindCmd, KindAck}
+var Kinds = []Kind{KindObs, KindObs2, KindTel, KindUpdate, KindEvent, KindStatus, KindCmd, KindAck}
 
 // Message is implemented by every payload type so that Marshal and Unmarshal
 // can pick the right schema.
@@ -70,6 +79,41 @@ type Obs struct {
 
 // Kind implements Message.
 func (*Obs) Kind() Kind { return KindObs }
+
+// Obs2 is the V2 observation message: one combined record per bucket, because
+// the gateway is the weather station. Published on
+// V2/{user_id}/PWS/{device_id}/obs.
+type Obs2 struct {
+	V         int       `json:"v"`
+	DeviceID  string    `json:"device_id"`
+	Seq       uint64    `json:"seq"`
+	Sent      time.Time `json:"sent"`
+	IntervalS int       `json:"interval_s"`
+	Buckets   []Record  `json:"buckets"`
+}
+
+// Kind implements Message.
+func (*Obs2) Kind() Kind { return KindObs2 }
+
+// Record is the combined observation of the whole gateway for one bucket.
+type Record struct {
+	Start time.Time `json:"start"`
+	// Live is false for a backfill: the record waited in the outbox or
+	// answers a resync.
+	Live bool `json:"live"`
+	// Synced is whether the clock was synchronized while the bucket was
+	// recorded.
+	Synced bool `json:"synced"`
+	// N is the packet count over every contributing sensor.
+	N    int          `json:"n"`
+	Meta *StationMeta `json:"meta,omitempty"`
+	F    Fields       `json:"f"`
+	// Src names the sensor that supplied each field, for support only.
+	Src map[string]string `json:"src,omitempty"`
+	Sig *Signal           `json:"sig,omitempty"`
+	// Raw holds the raw samples: sensor key to decoder fields.
+	Raw map[string]json.RawMessage `json:"raw,omitempty"`
+}
 
 // Bucket holds the aggregates of every selected station for one interval
 // starting at Start. Stations must be non-nil (an empty slice is fine); a nil
@@ -376,6 +420,8 @@ func New(kind Kind) Message {
 	switch kind {
 	case KindObs:
 		return &Obs{}
+	case KindObs2:
+		return &Obs2{}
 	case KindTel:
 		return &Tel{}
 	case KindUpdate:

@@ -1,0 +1,1 @@
+v must be 2 for the V2 record; v 0 is the old stations[] shape
